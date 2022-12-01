@@ -215,9 +215,67 @@ visualize_bigrams <- function(bigrams) {
 ## 4.2.1 Counting and correlating among sections
 
 ## consider Pride and Prejudice divided into 10-line section
+## What words tend to appear in the same section.
+
+austen_section_words <- austen_books() %>%
+  filter(book == "Pride & Prejudice") %>%
+  mutate(section = row_number() %/% 10) %>%
+  filter(section > 0) %>%
+  unnest_tokens(word, text) %>%
+  filter(!word %in% stop_words$word)
+
+austen_section_words
+
+## We can use the pairwise_count(). This will result in one row for each pair 
+## of words in the word variable. Then you can count common pairs of words 
+## co-appearing within the same section
+
+word_pairs <- austen_section_words %>%
+  pairwise_count(word, section, sort = TRUE)
+
+word_pairs
+
+## This still results in a tidy format
 
 
+word_pairs %>%
+  filter(item1 == "darcy")
 
+## 4.2.2 Pairwise correlation
 
+## phi coefficient
 
+## need to filter for relatively common words first
+
+word_cors <- austen_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 20) %>%
+  pairwise_cor(word, section, sort = TRUE)
+
+word_cors
+
+word_cors %>%
+  filter(item1 == "pounds")
+
+word_cors %>%
+  filter(item1 %in% c("elizabeth", "pounds", "married", "pride")) %>%
+  group_by(item1) %>%
+  slice_max(correlation, n = 6) %>%
+  ungroup() %>%
+  mutate(item2 = reorder(item2, correlation)) %>%
+  ggplot(aes(item2, correlation)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ item1, scales = "free") +
+  coord_flip()
+
+set.seed(2016)
+
+word_cors %>%
+  filter(correlation > .15) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
 
