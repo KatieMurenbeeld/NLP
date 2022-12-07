@@ -196,3 +196,62 @@ austen_dtm
 
 # 5.3 Tidying corpus objects with metadata
 
+## Some data structures store document collections before tokenization, a "corpus"
+## These are stored alongside metadata 
+
+## look at the acq corpus from the tm package. This contains 50 articles from Reuters
+
+data("acq")
+acq
+
+## the first document
+acq[[1]]
+
+## A corpus object is structured like a list, with each item containing both text and metadata
+## A flexible storage method for documents, but doesn't lend itself to processing with tidy tools
+
+## We can use the tidy() method to construct a table with one row per document, including the metadaa
+## as columns alongside the text
+
+acq_td <- tidy(acq)
+acq_td
+
+## We can then use the unnest_tokens() to find the most common words across the 50 Reuters articles
+## or the ones most specific to each article
+
+acq_tokens <- acq_td %>%
+  select(-places) %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by = "word")
+
+## find the most common words
+acq_tokens %>%
+  count(word, sort = TRUE)
+
+## calculate the term freq - inverse document frequency (tf-idf)
+acq_tokens %>%
+  count(id, word) %>%
+  bind_tf_idf(word, id, n) %>%
+  arrange(desc(tf_idf))
+
+## 5.3.1 Example: mining financial articles
+
+## Corpus objects are a common output format for data ingesting packages
+## so the tidy() function gives us access to a wide variety of text data.
+## tm.plugin.webmining connects to online feeds to retrieve news articles based on a keyword
+## For instance, performing WebCorpus(GoogleFinanceSource("NASDAQ:MSFT")) retrieves
+## the 20 most recent articles related to the Microsoft (MSFT) stock.
+
+library(tm.plugin.webmining) ## This is out of date and no longer a part of the CRAN package!
+library(purrr) # part of the tidyverse, provides tools for working with functions and vectors
+## ended up trying this in the R console
+#library(devtools)
+#install_github("mannau/tm.plugin.webmining")
+## but it didn't work. Error: Failed to install 'tm.plugin.webmining' from GitHub:
+## (converted from warning) installation of package ‘XML’ had non-zero exit status
+
+## May need to figure out how to do this with the "rvest" and "httr" packages
+## Just read through the rest of the chapter. Will need to revisit this.
+## I wonder if I could take the code from GitHub? 
+## https://github.com/mannau/tm.plugin.webmining/blob/master/R/source.R
+
