@@ -134,6 +134,19 @@ inaug_tf_idf %>%
   geom_col(show.legend = FALSE) + 
   facet_wrap(~ document, scales = "free")
 
+## We also want to use reorder_within() 
+
+inaug_tf_idf %>%
+  filter(document %in% notable_speeches) %>%
+  arrange(desc(tf_idf)) %>%
+  group_by(document) %>%
+  slice(1:10) %>%
+  ungroup() %>%
+#  mutate(term = reorder_within(x, by, within)) %>%
+  ggplot(aes(tf_idf, term, fill=document)) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ document, scales = "free")
+
 ## Got it!
 
 ## We can also extract the year from each document's name
