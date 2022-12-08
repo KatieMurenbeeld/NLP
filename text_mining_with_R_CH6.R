@@ -249,25 +249,110 @@ chapter_classifications %>%
 ## Only two chapters from Northanger Abbey were misclassified, the LDA describes
 ## them both as coming from Mansfield Park.
 
+## 6.2.3 By word assignments: augment
 
+## The LDA algorithm assigns each word in each document to a topic. The more
+## words in a documents assigned to that topic, the more weight (gamma) will
+## go on that document-topic classification.
+## How to find which words in each document were assigned to which topic?
+## augment(), part of the broom package, uses a model to add information to 
+## each observation in the original data. 
 
+assignments <- augment(chapters_lda, data = chapters_dtm)
+assignments
 
+## can then combine the assignments table with the consensus book titles to
+## find which words were incorrectly classified.
 
+assignments <- assignments %>%
+  separate(document, c("title", "chapter"),
+           sep = "_", convert = TRUE) %>%
+  inner_join(book_topics, by = c(".topic" = "topic"))
 
+assignments
 
+## With this data (true book title and assigned/predicted book title) we can 
+## make a confusion matrix, showing how often words from one book
+## were assigned to another
 
+library(scales)
 
+assignments %>%
+  count(title, consensus, wt = count) %>%
+  mutate(across(c(title, consensus), ~str_wrap(., 20))) %>%
+  group_by(title) %>%
+  mutate(percent = n / sum(n)) %>%
+  ggplot(aes(consensus, title, fill = percent)) + 
+  geom_tile() + 
+  scale_fill_gradient2(high = "darkred", label = percent_format()) +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        panel.grid = element_blank()) +
+  labs(x = "Book words were assigned to", 
+       y = "Book words came from", 
+       fill = "% of assignemnts")
 
+## What were the most commonly mistaken words?
 
+wrong_words <- assignments %>%
+  filter(title != consensus)
 
+wrong_words
 
+wrong_words %>%
+  count(title, consensus, term, wt = count) %>%
+  ungroup() %>%
+  arrange(desc(n))
 
+word_counts %>%
+  filter(word == "wilderness")
 
+## In a few cases there are a few wrongly classified words that never appeared
+## in the novel they were assigned to. For example "wilderness" only appears
+## in Mansfield Park, not in Emma. 
+## The LDA algorithm is stochastic, and it can accidentally land on a topic
+## that spans multiple books. 
 
+# 6.3 Alternative LDA implementations
 
+## There is another implementation of LDA using the mallet package.
+## Mallet takes in non-tokenized documents, performs the tokenization itself, 
+## and requires a separate file of stopwords. 
 
+## We need to collapse the text into one string for each document before 
+## performing the LDA.
 
+library(mallet)
 
+## create a vector with one string per chapter
+collapsed <- by_chapter_word %>%
+  anti_join(stop_words, by = "word") %>%
+  mutate(word = str_replace(word, "'", "")) %>%
+  group_by(document) %>%
+  summarize(text = paste(word, collapse = " "))
 
+## create an empty file of "stopwords"
+file.create(empty_file <- tempfile())
+docs <- mallet.import(collapsed$document, collapsed$text, empty_file)
+
+mallet_model <- MalletLDA(num.topics = 4)
+mallet_model$loadDocuments(docs)
+mallet_model$train(100)
+
+## Once the model is created, we can use the tidy() and augment() functions 
+## roughly the same way. Including extracting the probabilities of words
+## within each topic or topics within each document.
+
+## word-topic pairs
+tidy(mallet_model)
+
+## document-topic pairs
+tidy(mallet_model, matrix = "gamma")
+
+## column needs to be named "term" or "augment"
+term_counts <- rename(word_counts, term = word)
+augment(mallet_model, term_counts)
+
+## Then we can use ggplot2 to visualize the model in the same way as the LDA() 
 
 
