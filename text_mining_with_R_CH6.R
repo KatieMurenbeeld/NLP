@@ -37,7 +37,7 @@ ap_topics
 
 ## Now the model is a one-topic-per-term-per-row format, i.e. a tidy format
 
-## Use dplyr's slice_mas() to find the 10 terms that are most common within each topics
+## Use dplyr's slice_max() to find the 10 terms that are most common within each topics
 
 ap_top_terms <- ap_topics %>%
   group_by(topic) %>%
@@ -57,14 +57,14 @@ ap_top_terms %>%
 ## This helps us to understand the words that contribute to each topic and to see any words that
 ## occur in both topics
 
-## We could also consider tthe terms that had the greatest difference in beta between topic 1 and 2.
+## We could also consider the terms that had the greatest difference in beta between topic 1 and 2.
 ## We use the log ratio of beta from topic 2/ beta from topic 1.
 ## Beta2 being twice as large as Beta1 has a log ratio of 1
 ## Beta1 being twice as large as Beta2 has a log ratio of 2
 ## We can filter for relatively common words, such as those with a beta > 1/1000 in at least one topic
 
 beta_wide <- ap_topics %>%
-  mutate(topic = paste0("topic", topic)) %>% # paste0, concatenate strings without spaces
+  mutate(topic = paste0("topic", topic)) %>% # paste0, concatenate strings without spaces, leads to "topic1" and "topic2"
   pivot_wider(names_from = topic, values_from = beta) %>%
   filter(topic1 > 0.001 | topic2 > 0.001) %>%
   mutate(log_ratio = log2(topic2 / topic1))
@@ -80,7 +80,7 @@ beta_wide %>%
   geom_col(show.legend = FALSE) + 
   scale_y_reordered()
   
-## 6.1.2 Dcoument-topic probabilities
+## 6.1.2 Document-topic probabilities
 
 ## LDA also models each document as a mixutre of topics. 
 ## We can examine the per-document-per-topic probabilities, gamma
