@@ -12,6 +12,7 @@ library(reshape2)
 library(wordcloud)
 library(forcats)
 library(topicmodels)
+library(tidyr)
 
 ## Date: 11 January 2023
 ## Testing out content analysis and topic modeling with the VIP Fall 2022 news articles
@@ -57,14 +58,34 @@ vip.tidy
 
 vip.tidy %>%
   count(term, sort = TRUE)
+
+vip.tidy %>%
+  count(term, sort = TRUE) %>%
+  filter(n > 10) %>% 
+  mutate(term = reorder(term, n)) %>%
+  ggplot(aes(n, term)) +
+  geom_col() +
+  labs(y = NULL)
+
 # notice that "2022", "copyright", and "page" are in every document (n = 47). These are other
 # possible words that could be removed
 # Also these are relative short articles so the term/word counts are fairly low
 
 ## Let's remove "2022", "copyright", and "page"
 
-#vip.tidy <- vip.tidy %>%
-#  anti_join()
+my_stopwords <- tibble(term = c(as.character(1:10), 
+                                "2022", "page", "copyright"))
+
+vip.tidy <- vip.tidy %>%
+  anti_join(my_stopwords)
+
+vip.tidy %>%
+  count(term, sort = TRUE)
+
+## recast a new dtm (this is redundant, but I will fix that later)
+
+vip.dtm2 <- vip.tidy %>%
+  cast_dtm(document, term, count)
 
 vip.tidy %>%
   count(term, sort = TRUE) %>%
@@ -120,17 +141,15 @@ vip.tidy %>%
 ## Analyzing word and document frequency: tf-idf
 vip.tidy
 
+## Add an animal column to roughly split the articles into bear or wolf related articles
+vip.tidy$document <- tolower(vip.tidy$document)
+vip.tidy$animal <- ifelse(str_detect(vip.tidy$document, "bear") == TRUE, "bear", "wolf")
+
 # We need to order the table by count first
 vip.words <- vip.tidy %>%
   arrange(desc(count))
 vip.words
 
-vip.words['animal'] <- NA
-
-# If document has "bear" I want bear in the animal column and if document has "wolf" or "wolve" I want wolf in the animal column
-
-vip.words$document <- tolower(vip.words$document)
-vip.words$animal <- ifelse(str_detect(vip.words$document, "bear") == TRUE, "bear", "wolf")
 # I need to work on that more, good enough for now to test things out
 
 vip.words %>% count(animal)
@@ -163,38 +182,38 @@ vip.tf.idf %>%
   arrange(desc(tf_idf))
 
 vip.tf.idf %>%
-  group_by(document) %>%
+  group_by(animal) %>%
   slice_max(tf_idf, n = 5) %>%
   ungroup() %>%
   mutate(term = reorder(term, tf_idf)) %>%
-  ggplot(aes(tf_idf, term, fill = document)) + 
+  ggplot(aes(tf_idf, term, fill = animal)) + 
   geom_col(show.legend = FALSE) + 
   labs(x = "tf-idf", y = NULL) + 
-  facet_wrap(~document, ncol = 5, scales = "free")
+  facet_wrap(~animal, ncol = 5, scales = "free")
 
 
 ## Do I want to mess with bigrams?
 ## If so I need to figure out how to get these pdfs in here so that I can use unnest_tokens()
-## I don't think a huge issue for now. The title and newspaper are being included.
+## I don't think a huge issue for now/practice, that the title and newspaper are being included.
 
 ## I want to move on to testing the LDA. Can think more about text mining later.
 
 ## Here we want to use the vip.dtm to run the LDA
 ## Just two topics for now to see if it can find the bear and wolf articles
 
-vip.lda <- LDA(vip.dtm, k = 2, control = list(seed = 1234))
-vip.lda
+vip.lda2 <- LDA(vip.dtm2, k = 2, control = list(seed = 1234))
+vip.lda2
 
-vip.topics <- tidy(vip.lda, matrix = "beta")
-vip.topics
+vip.topics2 <- tidy(vip.lda2, matrix = "beta")
+vip.topics2
 
-vip.top.terms <- vip.topics %>%
+vip.top.terms2 <- vip.topics2 %>%
   group_by(topic) %>%
   slice_max(beta, n = 10) %>%
   ungroup() %>%
   arrange(topic, -beta) # arrange sorts the data
 
-vip.top.terms %>%
+vip.top.terms2 %>%
   mutate(term = reorder_within(term, beta, topic)) %>%
   ggplot(aes(beta, term, fill = factor(topic))) + 
   geom_col(show.legend = FALSE) + 
@@ -207,13 +226,13 @@ vip.top.terms %>%
 # The words with the greatest differences between the two topics 
 # (so if occurring in topic2 very unlikely to occur in topic1 and vice versa)
 
-vip.beta.wide <- vip.topics %>%
+vip.beta.wide2 <- vip.topics2 %>%
   mutate(topic = paste0("topic", topic)) %>%
   pivot_wider(names_from = topic, values_from = beta) %>%
   filter(topic1 > 0.001 | topic2 > 0.001) %>%
   mutate(log_ratio = log2(topic2 / topic1))
 
-vip.beta.wide %>%
+vip.beta.wide2 %>%
   arrange(desc(abs(log_ratio))) %>%
   head(20) %>%
   mutate(term = reorder(term, log_ratio)) %>%
@@ -221,20 +240,195 @@ vip.beta.wide %>%
   geom_col(show.legend = FALSE) + 
   scale_y_reordered()
 
-vip.docs <- tidy(vip.lda, matrix = "gamma")
-vip.docs
+vip.docs2 <- tidy(vip.lda2, matrix = "gamma")
+vip.docs2
 
-vip.docs %>%
+vip.docs2 %>%
+  mutate(title = reorder(document, gamma * topic)) %>%
+  ggplot(aes(factor(topic), gamma)) +
+  geom_boxplot() +
+  facet_wrap(~ document) +
+  labs(x = "topic", y = expression(gamma))
+
+vip.docs2.classification <- vip.docs2 %>%
+  group_by(document) %>%
+  slice_max(gamma) %>%
+  ungroup()
+
+vip.docs2.topics <- vip.tidy %>%
+  group_by(document) %>%
+  mutate(animal_orig = animal) %>%
+  count(document, animal_orig) %>%
+  group_by(document) %>%
+  select(-n)%>%
+  ungroup() 
+
+vip.docs2.topics$topic <- ifelse(vip.docs2.topics$animal_orig == "wolf",1,2)
+vip.docs2.topics
+
+vip.docs2.classification$animal_mod <- ifelse(vip.docs2.classification$topic == 1, "wolf", "bear")
+vip.docs2.classification
+vip.docs2.classification$document <- tolower(vip.docs2.classification$document)
+vip.docs2.misclass <- vip.docs2.classification %>%
+  inner_join(vip.docs2.topics, by = "document") %>%
+  filter(animal_orig != animal_mod)
+vip.docs2.misclass
+
+## There are 18 out of 47 misclassified articles.  Which isn't great...
+# (21 if I remove my_stopwords, so I definitely need to work on getting the 
+# document title and source information out of the text that is being analyzed). 
+## Most are either one or the other topic with only a few with gamma between 0-1
+## There are a few articles without a sharp distinction.
+
+## Let's test with more topics!
+# Let's do 4 topics
+
+vip.lda4 <- LDA(vip.dtm2, k = 4, control = list(seed = 1234))
+vip.lda4
+
+vip.topics4 <- tidy(vip.lda4, matrix = "beta")
+vip.topics4
+
+vip.top.terms4 <- vip.topics4 %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  arrange(topic, -beta) # arrange sorts the data
+
+vip.top.terms4 %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered()
+
+vip.beta.wide4 <- vip.topics4 %>%
+  mutate(topic = paste0("topic", topic)) %>%
+  pivot_wider(names_from = topic, values_from = beta) %>%
+  filter(topic1 > 0.001 | topic2 > 0.001) %>%
+  mutate(log_ratio = log2(topic2 / topic1))
+
+vip.beta.wide4 %>%
+  arrange(desc(abs(log_ratio))) %>%
+  head(20) %>%
+  mutate(term = reorder(term, log_ratio)) %>%
+  ggplot(aes(log_ratio, term)) + 
+  geom_col(show.legend = FALSE) + 
+  scale_y_reordered()
+
+vip.docs4 <- tidy(vip.lda4, matrix = "gamma")
+vip.docs4
+
+vip.docs4 %>%
   mutate(titel = reorder(document, gamma * topic)) %>%
   ggplot(aes(factor(topic), gamma)) +
   geom_boxplot() +
   facet_wrap(~ document) +
   labs(x = "topic", y = expression(gamma))
 
-## Very little overlap or misscalssified news articles with only two topics. 
+# Let's do 6 topics
 
-## Let's test with more topics!
+vip.lda6 <- LDA(vip.dtm2, k = 6, control = list(seed = 1234))
+vip.lda6
 
+vip.topics6 <- tidy(vip.lda6, matrix = "beta")
+vip.topics6
 
+vip.top.terms6 <- vip.topics6 %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  arrange(topic, -beta) # arrange sorts the data
 
+vip.top.terms6 %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered()
 
+vip.beta.wide6 <- vip.topics6 %>%
+  mutate(topic = paste0("topic", topic)) %>%
+  pivot_wider(names_from = topic, values_from = beta) %>%
+  filter(topic1 > 0.001 | topic2 > 0.001) %>%
+  mutate(log_ratio = log2(topic2 / topic1))
+
+vip.beta.wide6 %>%
+  arrange(desc(abs(log_ratio))) %>%
+  head(20) %>%
+  mutate(term = reorder(term, log_ratio)) %>%
+  ggplot(aes(log_ratio, term)) + 
+  geom_col(show.legend = FALSE) + 
+  scale_y_reordered()
+
+vip.docs6 <- tidy(vip.lda6, matrix = "gamma")
+vip.docs6
+
+vip.docs6 %>%
+  mutate(titel = reorder(document, gamma * topic)) %>%
+  ggplot(aes(factor(topic), gamma)) +
+  geom_boxplot() +
+  facet_wrap(~ document) +
+  labs(x = "topic", y = expression(gamma))
+
+vip.docs6.classification <- vip.docs6 %>%
+  group_by(document) %>%
+  slice_max(gamma) %>%
+  ungroup()
+vip.docs6.classification
+
+# Let's do 16 topics. The number of codes in the codebook
+
+vip.lda16 <- LDA(vip.dtm2, k = 16, control = list(seed = 1234))
+vip.lda16
+
+vip.topics16 <- tidy(vip.lda16, matrix = "beta")
+vip.topics16
+
+vip.top.terms16 <- vip.topics16 %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>% # Some have more than 10 because the beta values are "tied"
+  ungroup() %>%
+  arrange(topic, -beta) # arrange sorts the data
+
+vip.top.terms16 %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered()
+
+vip.beta.wide16 <- vip.topics16 %>%
+  mutate(topic = paste0("topic", topic)) %>%
+  pivot_wider(names_from = topic, values_from = beta) %>%
+  filter(topic1 > 0.001 | topic2 > 0.001) %>%
+  mutate(log_ratio = log2(topic2 / topic1))
+
+vip.beta.wide16 %>%
+  arrange(desc(abs(log_ratio))) %>%
+  head(20) %>%
+  mutate(term = reorder(term, log_ratio)) %>%
+  ggplot(aes(log_ratio, term)) + 
+  geom_col(show.legend = FALSE) + 
+  scale_y_reordered()
+
+vip.docs16 <- tidy(vip.lda16, matrix = "gamma")
+vip.docs16
+
+vip.docs16 %>%
+  mutate(title = reorder(document, gamma * topic)) %>%
+  ggplot(aes(factor(topic), gamma)) +
+  geom_boxplot() +
+  facet_wrap(~ document) +
+  labs(x = "topic", y = expression(gamma))
+
+vip.docs16.classification <- vip.docs16 %>%
+  group_by(document) %>%
+  slice_max(gamma) %>%
+  ungroup()
+vip.docs16.classification
+
+vip.docs16.classification %>%
+  count(topic) %>%
+  ggplot(aes(topic, n, fill=n)) + 
+  geom_bar(stat="identity")
