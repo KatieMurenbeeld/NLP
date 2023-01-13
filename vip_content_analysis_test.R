@@ -29,6 +29,11 @@ vip <- lapply(files, pdf_text)
 lapply(vip, length)
 length(vip)
 
+# Have a look at one of the documents
+vip[[42]]
+length(vip[[42]])
+## The length of each files corresponds to the number of pdf pages
+
 ## Next, build the corpus using the Corpus() function from the tm package
 
 corp <- Corpus(URISource(files), # First argument is what we want to use to create the corpus, the vector of pdf files. URI (uniform resource identifier) source means that the vector of file names identifies our resources
@@ -76,15 +81,22 @@ vip.tidy %>%
 my_stopwords <- tibble(term = c(as.character(1:10), 
                                 "2022", "page", "copyright"))
 
+my_stopwords2 <- tibble(term = c(as.character(1:10), 
+                                "2022", "page", "copyright", "can", "said", "october", "november"))
+
 vip.tidy <- vip.tidy %>%
   anti_join(my_stopwords)
 
 vip.tidy %>%
   count(term, sort = TRUE)
 
+vip.tidy2 <- vip.tidy %>%
+  anti_join(my_stopwords2)
 ## recast a new dtm (this is redundant, but I will fix that later)
 
 vip.dtm2 <- vip.tidy %>%
+  cast_dtm(document, term, count)
+vip.dtm3 <- vip.tidy2 %>%
   cast_dtm(document, term, count)
 
 vip.tidy %>%
@@ -379,7 +391,7 @@ vip.docs6.classification
 
 # Let's do 16 topics. The number of codes in the codebook
 
-vip.lda16 <- LDA(vip.dtm2, k = 16, control = list(seed = 1234))
+vip.lda16 <- LDA(vip.dtm3, k = 16, control = list(seed = 1234))
 vip.lda16
 
 vip.topics16 <- tidy(vip.lda16, matrix = "beta")
