@@ -444,3 +444,6 @@ vip.docs16.classification %>%
   count(topic) %>%
   ggplot(aes(topic, n, fill=n)) + 
   geom_bar(stat="identity")
+
+## Try to make a probability by topic for each document. I'm pretty sure that is what I am doing in line 430-435, but I like the 
+## bar chart in Blei 2003
