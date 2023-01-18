@@ -213,7 +213,7 @@ vip.tf.idf %>%
 ## Here we want to use the vip.dtm to run the LDA
 ## Just two topics for now to see if it can find the bear and wolf articles
 
-vip.lda2 <- LDA(vip.dtm2, k = 2, control = list(seed = 1234))
+vip.lda2 <- LDA(vip.dtm, k = 2, control = list(seed = 1234))
 vip.lda2
 
 vip.topics2 <- tidy(vip.lda2, matrix = "beta")
