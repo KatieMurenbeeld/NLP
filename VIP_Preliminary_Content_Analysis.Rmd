@@ -1,0 +1,172 @@
+---
+title: "VIP_Preliminary_Content_Analysis"
+author: "Katie Murenbeeld"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RCurl)
+library(XML)
+library(stringr)
+library(rvest)
+library(dplyr)
+library(tidytext)
+library(ggplot2)
+library(wordcloud)
+library(pdftools)
+library(tm)
+library(reshape2)
+library(wordcloud)
+library(forcats)
+library(topicmodels)
+library(tidyr)
+```
+
+# VIP Fall 2022/Spring 2023
+
+## Content Analysis and Topic Modeling of Wildlife Conservation Articles
+
+Intro text...
+
+
+## Creating the Corpus (and some preprocessing)
+
+A corpus is... In this case the corpus is the collection of roughly 50 articles that were reviewed in the VIP class in the fall of 2022. 
+
+Through a bit of trial and error I found that using this bit of code created a corpus with the some extra lines of text which contained information about the article title, the newspaper, date, and page, all of which is also in the file name. Because of this I decided to removed the first two lines of text and the line of text with the copyright information from the files before processing into a corpus. 
+
+```{r sample_corp, echo=TRUE, eval=FALSE}
+
+# Load in the files as a list of file names.
+# In this case all of the files are pdfs and they all are in the working directory.
+files <- list.files(pattern = "pdf$")
+
+corp <- Corpus(URISource(files), # First argument is what we want to use to create the corpus, the vector of pdf files. URI (uniform resource identifier) source means that the vector of file names identifies our resources
+               readerControl = list(reader = readPDF)) # Second argument requires a list of control parameters, one is reader, to read in PDF files, same in tm as pdftools package
+
+```
+
+In this code block the files are loaded the same as before, but we will remove the first two lines of text and the copyright information before building the corpus. 
+
+```{r make_corpus, echo=TRUE, EVAL=TRUE}
+
+# Load in the files as a list of file names.
+# In this case all of the files are pdfs and they all are in the working directory.
+files <- list.files(pattern = "pdf$")
+
+# Use lapply to to extract the text from all of the pdf files in the list
+vip <- lapply(files, pdf_text) 
+
+# Want to remove the first 2 lines of text which contains the title, newspaper, and page number
+# Want to remove the line of text which has the copyright info
+for (x in 1:length(vip)){
+  #print(x)
+  vip[[x]] <- str_replace(vip[[x]], regex("[a-zA-Z0-9_].*[\n]"), "")
+  vip[[x]] <- str_replace(vip[[x]], regex("[a-zA-Z0-9_].*[\n]"), "")
+  vip[[x]] <- str_replace(vip[[x]], regex("Copyright.*[\n]"), "")
+}
+
+# Next, build the corpus using the Corpus() function from the tm package
+vip_corp <- Corpus(VectorSource(vip))
+
+```
+
+Now that we have a corpus of news articles we can create a Document Term Matrix (DTM). From the DTM we can create a tidy data frame.
+
+## Creating and Document Term Matrix and a Tidy Dataframe
+
+```{r dtm_tidy, echo=TRUE, eval=TRUE}
+
+# From this corpus, create a document term matrix.
+# The DTM will be useful for topic modeling but can be converted into a tidy data frame 
+# for descriptive and exploratory analysis
+
+vip.dtm <- DocumentTermMatrix(vip_corp, 
+                              control = 
+                                list(removePunctuation = TRUE, # removes all punctuation
+                                     stopwords = TRUE, # removes common "stop words"
+                                     tolower = TRUE, # makes all the characters lower case
+                                     stemming = FALSE, 
+# here we did not "stem" the words (for example: "killed" and "killing" are not turned into the stem word "kill")
+                                     removeNumbers = FALSE, # we kept numbers
+                                     bounds = list(global = c(1, Inf)))) 
+# Here we count words that appear in at least 1 document
+
+# Have a look at the dtm
+inspect(vip.dtm)
+
+# Now we can convert the dtm to a tidy dataframe
+vip.tidy <- tidy(vip.dtm)
+vip.tidy
+```
+
+One of the problems with building the corpus this way instead of from the files is that we lose the information in the document column. Here the document column has a number for each article, but we want the actual file name. 
+
+## (More) Text preprocessing
+
+```{r preprocess, echo=TRUE, eval=FALSE}
+
+# Make the data in the document a Number
+vip.tidy$document <- as.numeric(vip.tidy$document)
+vip.tidy
+
+# Replace the document number with the document name from the list of files
+for (x in 1:length(files)) {
+  print(files[x])
+  vip.tidy$document[vip.tidy$document == x] <- files[x]
+}
+
+# make the characters in the document column all lowercase
+vip.tidy$document <- tolower(vip.tidy$document)
+vip.tidy
+```
+
+
+### Parsing out information from the document file name and adding an animal label
+
+One thing that may be helpful for the content analysis is to take the information found in the document column and parse it out into other data columns. For example the file name contains the name of the article, the name of the newspaper, the date published, and the page number. Here we will take the name of the article, the newspaper and the date and put all of that information into three new columns. We will also create a column called "animal" which will make a rough approximation of whether the article was about bears or wolves based on the article title. 
+
+Luckily for use, this information is split by some character patterns. The article title is the first string of 
+
+```{r parse_filename, echo=TRUE, eval=TRUE}
+vip.tidy <- vip.tidy %>%
+  mutate(title = str_extract(document, regex("(.*?)(?=__)"))) %>%
+  mutate(newspaper = str_extract(document, regex("(?<=__)[a-zA-Z]+-?_?.*(?=___)"))) %>%
+  mutate(date = str_extract(document, "[a-zA-Z]+_[0-9]+_[0-9]+(?=__)")) %>%
+  mutate(animal = ifelse(str_detect(vip.tidy$document, "bear") == TRUE, "bear", "wolf"))
+vip.tidy
+```
+
+
+
+### Final tidy dataframe
+
+Is there any other information we would want to include in the data frame?
+
+## Content Analysis
+### Let's explore the corpus
+
+What are the 20 most common words in the corpus?
+
+```{r corp_top_words, echo=FALSE, eval=TRUE}
+vip.tidy %>%
+  count(term, sort = TRUE)
+
+vip.tidy %>%
+  count(term, sort = TRUE) %>%
+  slice_max(n, n=20) %>% 
+  mutate(term = reorder(term, n)) %>%
+  ggplot(aes(n, term)) +
+  geom_col() +
+  labs(title = "20 Most Common Words in the VIP Corpus",
+       y = NULL)
+```
+
+
+### Sentiment analysis of the corpus
+
+
+
+
