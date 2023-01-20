@@ -22,6 +22,7 @@ library(tidyr)
 files <- list.files(pattern = "pdf$")
 files
 length(files)
+
 ## Use lapply to to extract the text from all of the pdf files in the list 
 ## In this case the files are all in the working directory
 vip <- lapply(files, pdf_text) 
@@ -76,6 +77,35 @@ inspect(vip.dtm)
 vip.tidy <- tidy(vip.dtm)
 vip.tidy
 
+## Make Document a Number
+
+vip.tidy$document <- as.numeric(vip.tidy$document)
+vip.tidy
+
+## Replace the document number with the document name from the list file
+
+for (x in 1:length(files)) {
+  print(files[x])
+  vip.tidy$document[vip.tidy$document == x] <- files[x]
+}
+vip.tidy
+
+## From the document column parse out the article name (first set of characters before __), 
+## the newspaper (second set of character between __ and ___), and the date (third set of characters between ___ and __)
+
+#str_match(vip.tidy$document, regex("(.*?)(?=__)")) # This gets the article title
+
+#str_match(vip.tidy$document, regex("(?<=__)[a-zA-Z]+-?_?.*(?=___)")) # This gets the newspaper name
+
+#str_match(vip.tidy$document, "[a-zA-Z]+_[0-9]+_[0-9]+(?=__)") # This gets the date
+
+vip.tidy <- vip.tidy %>%
+  mutate(title = str_extract(document, regex("(.*?)(?=__)"))) %>%
+  mutate(newspaper = str_extract(document, regex("(?<=__)[a-zA-Z]+-?_?.*(?=___)"))) %>%
+  mutate(date = str_extract(document, "[a-zA-Z]+_[0-9]+_[0-9]+(?=__)"))
+vip.tidy
+
+
 ## What are the most common words in the corpus?
 
 vip.tidy %>%
@@ -91,7 +121,7 @@ vip.tidy %>%
 
 
 ## I think I may have done this correctly. But I need to match the document name back to the tidy df. 
-## Then I want to figure out how to break out the document name to different parts like title, newspaper, and date.
+## Then I want to figure out how to break out the document name to different parts like title, newspaper, date, and animal.
 
 ## Sentiment Analysis
 
