@@ -6,7 +6,7 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+
 library(RCurl)
 library(XML)
 library(stringr)
@@ -22,6 +22,9 @@ library(wordcloud)
 library(forcats)
 library(topicmodels)
 library(tidyr)
+library(formatR)
+
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 60), tidy = TRUE, echo = TRUE)
 ```
 
 # VIP Fall 2022/Spring 2023
@@ -43,8 +46,12 @@ Through a bit of trial and error I found that using this bit of code created a c
 # In this case all of the files are pdfs and they all are in the working directory.
 files <- list.files(pattern = "pdf$")
 
-corp <- Corpus(URISource(files), # First argument is what we want to use to create the corpus, the vector of pdf files. URI (uniform resource identifier) source means that the vector of file names identifies our resources
-               readerControl = list(reader = readPDF)) # Second argument requires a list of control parameters, one is reader, to read in PDF files, same in tm as pdftools package
+corp <- Corpus(URISource(files), # First argument is what we want to use to create 
+               # the corpus, the vector of pdf files. 
+               # URI (uniform resource identifier) source means that the vector of 
+               # file names identifies our resources
+               readerControl = list(reader = readPDF)) # Second argument requires a 
+               # list of control parameters, one is reader, to read in PDF files.
 
 ```
 
@@ -88,39 +95,37 @@ vip.dtm <- DocumentTermMatrix(vip_corp,
                                 list(removePunctuation = TRUE, # removes all punctuation
                                      stopwords = TRUE, # removes common "stop words"
                                      tolower = TRUE, # makes all the characters lower case
+                                     # here we did not "stem" the words 
+                                     #(for example: "killed" and "killing" are not turned into the stem word "kill")
                                      stemming = FALSE, 
-# here we did not "stem" the words (for example: "killed" and "killing" are not turned into the stem word "kill")
                                      removeNumbers = FALSE, # we kept numbers
-                                     bounds = list(global = c(1, Inf)))) 
-# Here we count words that appear in at least 1 document
+                                     bounds = list(global = c(1, Inf)))) # count words that appear in at least 1 document
+
 
 # Have a look at the dtm
 inspect(vip.dtm)
 
 # Now we can convert the dtm to a tidy dataframe
 vip.tidy <- tidy(vip.dtm)
-vip.tidy
+head(vip.tidy, 5)
 ```
 
 One of the problems with building the corpus this way instead of from the files is that we lose the information in the document column. Here the document column has a number for each article, but we want the actual file name. 
 
 ## (More) Text preprocessing
 
-```{r preprocess, echo=TRUE, eval=FALSE}
+```{r preprocess, echo=TRUE, eval=TRUE}
 
 # Make the data in the document a Number
 vip.tidy$document <- as.numeric(vip.tidy$document)
-vip.tidy
 
 # Replace the document number with the document name from the list of files
 for (x in 1:length(files)) {
-  print(files[x])
   vip.tidy$document[vip.tidy$document == x] <- files[x]
 }
 
 # make the characters in the document column all lowercase
 vip.tidy$document <- tolower(vip.tidy$document)
-vip.tidy
 ```
 
 
@@ -128,7 +133,9 @@ vip.tidy
 
 One thing that may be helpful for the content analysis is to take the information found in the document column and parse it out into other data columns. For example the file name contains the name of the article, the name of the newspaper, the date published, and the page number. Here we will take the name of the article, the newspaper and the date and put all of that information into three new columns. We will also create a column called "animal" which will make a rough approximation of whether the article was about bears or wolves based on the article title. 
 
-Luckily for use, this information is split by some character patterns. The article title is the first string of 
+Luckily for use, this information is split by some character patterns. The article title is the first string of characters followed by two underscores __, the newspaper is between two underscores and three underscores, and the date can be parsed out because of the pattern of letters and numbers.
+
+We also look at the files name, and if "bear" is in the name the animal column will be set to "bear" and if "bear" is not in the document name the animal column will be set to "wolf". This is a pretty rough approximation, but we can come up with a better way to do this later.
 
 ```{r parse_filename, echo=TRUE, eval=TRUE}
 vip.tidy <- vip.tidy %>%
@@ -136,24 +143,24 @@ vip.tidy <- vip.tidy %>%
   mutate(newspaper = str_extract(document, regex("(?<=__)[a-zA-Z]+-?_?.*(?=___)"))) %>%
   mutate(date = str_extract(document, "[a-zA-Z]+_[0-9]+_[0-9]+(?=__)")) %>%
   mutate(animal = ifelse(str_detect(vip.tidy$document, "bear") == TRUE, "bear", "wolf"))
-vip.tidy
+head(vip.tidy, 5)
 ```
-
-
 
 ### Final tidy dataframe
 
-Is there any other information we would want to include in the data frame?
+Is there any other information we would want to include in the data frame? 
+
+Also, can we come up with a more efficient way to build a corpus? I ended up downloading each article as a pdf from newsbank. I had to do this because the format of the html from newsbank was beyond my beginner skills at web scrapping and text mining. While downloading the pdfs did not take long for approximately 50 articles, I imagine it may be more challenging with 1000s of articles. 
 
 ## Content Analysis
+
+What is content analysis...
+
 ### Let's explore the corpus
 
 What are the 20 most common words in the corpus?
 
 ```{r corp_top_words, echo=FALSE, eval=TRUE}
-vip.tidy %>%
-  count(term, sort = TRUE)
-
 vip.tidy %>%
   count(term, sort = TRUE) %>%
   slice_max(n, n=20) %>% 
@@ -166,6 +173,12 @@ vip.tidy %>%
 
 
 ### Sentiment analysis of the corpus
+
+### Analyzing word and document frequency: tf-idf
+
+## Topic Modeling
+
+### Latent Dirichlet Allocation (LDA)
 
 
 

@@ -36,7 +36,7 @@ length(vip[[1]])
 ## The length of each files corresponds to the number of pdf pages
 
 ## Want to remove the first 2 lines of text which contains the title, newspaper, and page number
-## Want to remove the line line of text which has the copyright info
+## Want to remove the line of text which has the copyright info
 for (x in 1:length(vip)){
   #print(x)
   vip[[x]] <- str_replace(vip[[x]], regex("[a-zA-Z0-9_].*[\n]"), "")
@@ -44,7 +44,7 @@ for (x in 1:length(vip)){
   vip[[x]] <- str_replace(vip[[x]], regex("Copyright.*[\n]"), "")
 }
 
-#vip[[1]]
+vip[[1]]
 #vip[[2]]
 #vip[[3]]
 #vip[[42]]
@@ -88,6 +88,8 @@ for (x in 1:length(files)) {
   print(files[x])
   vip.tidy$document[vip.tidy$document == x] <- files[x]
 }
+# make the document column all lowercase
+vip.tidy$document <- tolower(vip.tidy$document)
 vip.tidy
 
 ## From the document column parse out the article name (first set of characters before __), 
@@ -99,12 +101,16 @@ vip.tidy
 
 #str_match(vip.tidy$document, "[a-zA-Z]+_[0-9]+_[0-9]+(?=__)") # This gets the date
 
+## Add an animal column (probably not perfect but ok for now)
+#vip.tidy$animal <- ifelse(str_detect(vip.tidy$document, "bear") == TRUE, "bear", "wolf")
+
+## Combine all of the above into a few lines of code to add the new columns to the dataframe
 vip.tidy <- vip.tidy %>%
   mutate(title = str_extract(document, regex("(.*?)(?=__)"))) %>%
   mutate(newspaper = str_extract(document, regex("(?<=__)[a-zA-Z]+-?_?.*(?=___)"))) %>%
-  mutate(date = str_extract(document, "[a-zA-Z]+_[0-9]+_[0-9]+(?=__)"))
+  mutate(date = str_extract(document, "[a-zA-Z]+_[0-9]+_[0-9]+(?=__)")) %>%
+  mutate(animal = ifelse(str_detect(vip.tidy$document, "bear") == TRUE, "bear", "wolf"))
 vip.tidy
-
 
 ## What are the most common words in the corpus?
 
@@ -113,12 +119,13 @@ vip.tidy %>%
 
 vip.tidy %>%
   count(term, sort = TRUE) %>%
-  filter(n > 10) %>% 
+  slice_max(n, n=15) %>% 
   mutate(term = reorder(term, n)) %>%
   ggplot(aes(n, term)) +
   geom_col() +
   labs(y = NULL)
 
+## Should we make our own list of stop words? To remove words such as "said", can", or "also"?
 
 ## I think I may have done this correctly. But I need to match the document name back to the tidy df. 
 ## Then I want to figure out how to break out the document name to different parts like title, newspaper, date, and animal.
