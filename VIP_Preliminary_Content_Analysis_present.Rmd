@@ -1,0 +1,608 @@
+---
+title: "VIP Preliminary Content Analysis and Topic Modeling"
+author: "Katie Murenbeeld"
+date: "`r Sys.Date()`"
+output: powerpoint_presentation
+---
+
+```{r setup, include=FALSE}
+
+library(RCurl)
+library(XML)
+library(stringr)
+library(rvest)
+library(dplyr)
+library(tidytext)
+library(ggplot2)
+library(wordcloud)
+library(pdftools)
+library(tm)
+library(reshape2)
+library(wordcloud)
+library(forcats)
+library(topicmodels)
+library(tidyr)
+library(formatR)
+
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 60), tidy = TRUE, echo = TRUE)
+```
+
+
+## Content Analysis and Topic Modeling of Wildlife Conservation Articles
+
+**Content analysis** is a systemic approach to infer the meaning or focus of a text, or collection of texts, based on data derived from the text(s) (Stemler, 2001).  
+
+
+**Topic modeling** is a technique in which an algorithm analyzes words in a collection of texts or documents and then determines the themes, or topics, within the collection of the texts, which topic best represents each text, and how those topic can change through time (Blei, 2012).  
+
+
+## VIP Data Collection
+
+
+- Students collected and coded 50 news articles related to bears or wolves.  
+
+- 15 codes were created ranging in theme from wildlife conflicts with grazing to wildlife issues with people, wildlife, management, and so on. 
+
+- Each article was classified as one or several of the 15 codes and a valence (or positive or negative sentiment) was decided for each code in the article. 
+
+
+## Corpus and Data Formats
+
+A **corpus** is any collection of texts, where texts can be the written word, spoken word, or music.  
+
+```{r sample_corp, echo=FALSE, eval=FALSE}
+
+# Load in the files as a list of file names.
+# In this case all of the files are pdfs and they all are in the working directory.
+files <- list.files(pattern = "pdf$")
+
+corp <- Corpus(URISource(files), # First argument is what we want to use to create 
+               # the corpus, the vector of pdf files. 
+               # URI (uniform resource identifier) source means that the vector of 
+               # file names identifies our resources
+               readerControl = list(reader = readPDF)) # Second argument requires a 
+               # list of control parameters, one is reader, to read in PDF files.
+
+```
+
+
+```{r make_corpus, echo=FALSE, EVAL=TRUE}
+
+# Load in the files as a list of file names.
+# In this case all of the files are pdfs and they all are in the working directory.
+files <- list.files(pattern = "pdf$")
+
+# Use lapply to to extract the text from all of the pdf files in the list
+vip <- lapply(files, pdf_text) 
+
+# Remove the first two lines of text which contains the title, 
+# newspaper, and page number
+# Remove the line of text which has the copyright info
+for (x in 1:length(vip)){
+  #print(x)
+  vip[[x]] <- str_replace(vip[[x]], regex("[a-zA-Z0-9_].*[\n]"), "")
+  vip[[x]] <- str_replace(vip[[x]], regex("[a-zA-Z0-9_].*[\n]"), "")
+  vip[[x]] <- str_replace(vip[[x]], regex("Copyright.*[\n]"), "")
+}
+
+# Next, build the corpus using the Corpus() function from the tm package
+vip_corp <- Corpus(VectorSource(vip))
+
+```
+
+There are several useful data formats for content analysis and topic modeling. These include, but are not limited to, a **document term matrix (DTM)** and a **tidy data** frame. 
+
+## DTM
+
+In a **DTM** each:
+
+- row represents one document 
+- each column represents one term
+- each value in the cell contains the number of times that term occurs in the document. 
+ 
+This leads to a "sparse" data frame where many of the values are zero. Later on we will use this format to complete some more complex types of analysis on the corpus. 
+
+## Tidy Data Frame
+
+A **tidy data frame** is the opposite of a sparse matrix. In a tidy data frame:
+
+- each variable is a column
+- each observation is a row. 
+ 
+This results in a one-token-per-row data frame (or one-token-per-document-per-row). 
+
+A **token** is a meaningful unit of text. Here a token refers to to a single word (unigram), but in other analyses a token could be pairs of words (bigrams), sentences or paragraphs. 
+
+## Data Preprocessing
+
+To build the data frames we will: 
+
+
+- remove all punctuation and make all words lower case 
+- remove **stop words** (words like "to", "the", and "and")
+- we will also keep all numbers and all words that occur in at least one article
+- we will not **stem** the words
+
+
+
+```{r dtm_tidy, echo=FALSE, eval=TRUE}
+
+# From this corpus, create a document term matrix.
+# The DTM will be useful for topic modeling but 
+# can be converted into a tidy data frame 
+# for descriptive and exploratory analysis
+
+vip.dtm <- DocumentTermMatrix(vip_corp, 
+                              control = 
+                                list(# remove all punctuation
+                                     removePunctuation = TRUE, 
+                                     # remove common "stop words"
+                                     stopwords = TRUE, 
+                                     # make all the characters lower case
+                                     tolower = TRUE, 
+                                     # do not "stem" the words 
+                                     stemming = FALSE,
+                                      # keep numbers
+                                     removeNumbers = FALSE,
+                                     # include words that appear in at least 1 document
+                                     bounds = list(global = c(1, Inf)))) 
+
+
+# Have a look at the dtm
+#inspect(vip.dtm)
+
+# Now we can convert the dtm to a tidy dataframe
+vip.tidy <- tidy(vip.dtm)
+#head(vip.tidy, 5)
+```
+
+
+```{r preprocess, echo=FALSE, eval=TRUE}
+
+# Make a new column called "id" with the document number 
+vip.tidy$id <- vip.tidy$document
+# Then make the data in the document a number 
+vip.tidy$document <- as.numeric(vip.tidy$document)
+
+# Replace the document number with the document name from the list of files
+for (x in 1:length(files)) {
+  vip.tidy$document[vip.tidy$document == x] <- files[x]
+}
+
+# Make the characters in the document column all lowercase
+vip.tidy$document <- tolower(vip.tidy$document)
+```
+
+
+```{r parse_filename, echo=FALSE, eval=TRUE}
+vip.tidy <- vip.tidy %>%
+  mutate(title = str_extract(document, regex("(.*?)(?=__)"))) %>%
+  mutate(newspaper = str_extract(document, regex("(?<=__)[a-zA-Z]+-?_?.*(?=___)"))) %>%
+  mutate(date = str_extract(document, "[a-zA-Z]+_[0-9]+_[0-9]+(?=__)")) %>%
+  mutate(animal = ifelse(str_detect(vip.tidy$document, "bear") == TRUE, "bear", "wolf"))
+#head(vip.tidy, 5)
+```
+
+
+## Let's explore the corpus
+
+What are the 20 most common words in the corpus?
+
+The most common word in the corpus is "wildlife"!
+
+Should we make our own list of stop words? 
+- For example, how helpful are the words *will*, *said*, *can*, *also*, and *like*?
+
+```{r corp_top_words, echo=FALSE, eval=TRUE}
+vip.tidy %>%
+  count(term, sort = TRUE) %>%
+  slice_max(n, n=20) %>% 
+  mutate(term = reorder(term, n)) %>%
+  ggplot(aes(n, term)) +
+  geom_col() +
+  labs(title = "20 Most Common Words in the VIP Corpus",
+       y = NULL)
+```
+
+
+## Sentiment Analysis 
+
+- Often one wants to understand the overall sentiment or feeling of a text. 
+  - Within the VIP class we referred to this as the "valence".
+- One common approach to determining the sentiment of the text is to the combine or sum the sentiment content (or connotation) of each word within the text. 
+- Here we will use the Bing lexicon which classifies a word as either positive or negative.
+
+## Overall Sentiment of the Articles
+
+```{r sentiment, echo=FALSE, eval=TRUE}
+
+# First, join with the Bing sentiment lexicon.
+vip.sent <- vip.tidy %>%
+  inner_join(get_sentiments("bing"), by = c(term = "word")) %>%
+  count(document, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+## Try to relabel the x axis. 
+vip.sent$id <- row.names(vip.sent)
+vip.sent$id <- as.numeric(vip.sent$id)
+ggplot(vip.sent, aes(id, sentiment, fill = sentiment)) + 
+  geom_col(show.legend = FALSE) + 
+  labs(title = "Document Sentiment: Bing Lexicon")
+```
+
+## Common Positive and Negative Words
+
+What are the most common positive and negative words? 
+
+```{r sent_words, echo=FALSE, eval=TRUE}
+vip.bing.counts <- vip.tidy %>%
+  inner_join(get_sentiments("bing"), by = c(term = "word")) %>%
+  count(term, sentiment, sort = TRUE) %>%
+  ungroup()
+
+vip.bing.counts %>%
+  group_by(sentiment) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  mutate(term = reorder(term, n)) %>%
+  ggplot(aes(n, term, fill = sentiment)) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(x = "Contribution to sentiment", 
+       y = NULL,
+       title = "Most Common Positive and Negative Words")
+```
+
+## Word Clouds of Positive and Negative Words
+
+Another fun visualization of content analysis is a **word cloud**. 
+
+
+```{r sent_wordcloud, echo=FALSE, eval=TRUE, warning=FALSE}
+vip.tidy %>%
+  inner_join(get_sentiments("bing"), by = c(term = "word")) %>%
+  count(term, sentiment, sort = TRUE) %>%
+  acast(term ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("gray20", "gray80"),
+                   max.words = 100)
+```
+
+## Considerations
+
+- We may want to consider "stemming" as described above. 
+- In the future we may want to consider using a different lexicon, for example is "wild" really a negative word in this project? 
+
+```{r random_thought, echo=FALSE, eval=FALSE}
+#I need to think about this more. It may be challenging to match the data up to correct article (because of the text format, but it shouldn't be because the articles are brought in alphabetically when building the corpus).
+```
+
+## Term Frequency
+
+**Term frequency** can be a useful metric to help one determine the meaning or focus of a text. 
+
+However, often times common stop words like "the" and "to" will be the most frequent words within a text. 
+
+A term frequency weighted by how often the term occurs in the text is another way to use term frequency instead of just removing stop words from the text or corpus. 
+
+A type of weighted term frequency is **term frequency - inverse document frequency**, or **tf-idf**.  
+
+## Term Frequency and Inverse Document Frequency 
+
+Term frequency refers to how frequently a word occurs in a document relative to the total number of words in the document. 
+
+$tf = \frac{n_{word_i}}{total word count}$
+
+Inverse document frequency is the natural log of the number of documents relative to the number of documents containing a term. 
+
+$idf = ln(\frac{n_{documents}}{n_{documents containing the term}})$
+
+## TF-IDF 
+
+Term frequency - inverse document frequency (tf-idf) is term frequency and idf multiplied together. 
+
+The idf part of the equation will decrease the weight of a term for common terms and increase the weight of a word for rarely used words. Basically, "the frequency of a term weighted for how rarely it occurs. 
+
+Tf-idf answers the question, "How important is this word in a document?".
+
+## TF-IDF for 10 Articles
+
+- Here we determine the count **n** for each term in a document and the total word count **total** for each document.  
+
+$tf = \frac{n_{word_i}}{total word count}$
+
+- The **rank** is determined by the word count, so the most common word is ranked 1.
+
+```{r tf-idf1, echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+
+# Take a subset of the documents for this part
+
+vip.tidy.sub <- subset(vip.tidy, 
+                       id == c('1', '2', '3', '4', '5', 
+                               '6', '7', '8', '9', '10'))
+
+# We need to order the table by count first
+vip.words <- vip.tidy.sub %>%
+  arrange(desc(count))
+
+total.words <- vip.words %>%
+  group_by(id) %>%
+  summarise(total = sum(count))
+
+vip.words <- left_join(vip.words, total.words)
+
+vip.freq.rank <- vip.words %>%
+  mutate(rank = row_number(),
+         'term_frequency' = count/total) %>%
+  ungroup()
+
+vip.freq.rank %>%
+  ggplot(aes(rank, term_frequency, color=document)) + 
+  geom_line(size = 1.1, alpha = 0.8, show.legend = FALSE) + 
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(title = "Term Fequency by Term Rank: 10 Articles")
+
+```
+
+## TF-IDF for Articles Grouped by Animal
+
+We could also group the corpus by the animal topic of the article.
+
+```{r tf-idf2, echo=FALSE, eval=TRUE, message=FALSE}
+# We need to order the table by count first
+vip.words <- vip.tidy %>%
+  arrange(desc(count))
+
+total.words <- vip.words %>%
+  group_by(animal) %>%
+  summarise(total = sum(count))
+
+vip.words <- left_join(vip.words, total.words)
+
+vip.freq.rank <- vip.words %>%
+  mutate(rank = row_number(),
+         'term_frequency' = count/total) %>%
+  ungroup()
+
+vip.freq.rank %>%
+  ggplot(aes(rank, term_frequency, color=animal)) + 
+  geom_line(size = 1.1, alpha = 0.8, show.legend = TRUE) + 
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(title = "Term Frequency by Term Rank: Articles by Animal Classification")
+```
+
+## Slide Title
+
+- The highest tf-idf values for a document will show the most important words for a document. 
+- For example, in the "Deer abundance_CWD_and_is_it_that_a_wolf" article, the term "cwd" has the highest tf-idf for the document.
+
+
+```{r tf-idf_bind, echo=FALSE, eval=TRUE, warning=FALSE, fig.dim=c(10,10)}
+
+# We need to order the table by count first
+vip.words <- vip.tidy.sub %>%
+  arrange(desc(count))
+
+vip.tf.idf <- vip.words %>%
+  bind_tf_idf(term, title, count) %>%
+  arrange(desc(tf_idf))
+
+#vip.tf.idf %>%
+  #select(-total) %>%
+#  arrange(desc(tf_idf))
+
+vip.tf.idf %>%
+  group_by(id) %>%
+  slice_max(tf_idf, n = 10) %>%
+  ungroup() %>%
+  mutate(term = reorder(term, tf_idf)) %>%
+  ggplot(aes(tf_idf, term, fill = id)) + 
+  geom_col(show.legend = FALSE) + 
+  labs(x = "tf-idf", 
+       y = NULL,
+       title = "Top 10 TF-IDF Value Words in 10 Articles") + 
+  facet_wrap(~title, ncol = 3, scales = "free")
+```
+
+## Topic Modeling
+
+Topic modeling uses algorithms to examine a collection of texts and discover the topics of the corpus and the topic of each text. Topic models can organize a collection of documents based on these discovered themes. One very common approach is the **latent dirichlet allocation**.
+
+## Latent Dirichlet Allocation (LDA)
+
+Latent dirichlet allocation (LDA) is a probabilistic topic model. The LDA assumes that documents can have multiple topics (i.e. a document is a mixture of topics) and that each topic is made up of a distribution of words. The words within one topic can also occur within another topic's distribution of words.
+
+## How does LDA work?
+
+LDA is a generative model (i.e. it models how a document could be generated) which assumes that: 
+
+1. a set of topics are generated first 
+2. the model randomly chooses a distribution over that collection of topics
+3. for each word in the text, the model will randomly choose a topic from the distribution and then randomly choose a word from the distribution of words associated with the chosen topic (Blei, 2003). 
+
+## LDA Parameters
+
+There are two (hyper)parameters of interest for a LDA.
+
+- **beta** -  is the probability that a word belongs to the word distribution of a topic.
+- **gamma** - is the probability that a document belongs within a specific topic.
+
+## 2 Topic LDA
+
+Let's start with 2 topics, to see if the model can identify articles as relating to bears or wolves. 
+
+What is the probability that a word belongs in a topic?
+
+```{r lda_2_beta, echo=FALSE, eval=TRUE}
+
+# recast the tidy data frame back to a DTM
+# Not sure why, but otherwise I get a funny error
+vip.dtm2 <- vip.tidy %>%
+  cast_dtm(document, term, count) # recast, not sure why, but otherwise I get a funny error
+
+# Here, k is equal to 2 topics
+vip.lda2 <- LDA(vip.dtm2, k = 2, control = list(seed = 1234))
+
+# Get the beta values for each term
+vip.topics2 <- tidy(vip.lda2, matrix = "beta")
+
+vip.top.terms2 <- vip.topics2 %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  # arrange sorts the data
+  arrange(topic, -beta) 
+
+vip.top.terms2 %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered() + 
+  labs(title = "Term Beta Values for 2 Topics")
+
+
+```
+
+## 2 Topic LDA Gamma Values
+
+What is the probability that an article belongs to a topic?
+
+```{r lda_2_gamma, echo=FALSE, eval=TRUE, fig.dim=c(10,10)}
+
+vip.docs2 <- tidy(vip.lda2, matrix = "gamma")
+
+vip.docs2 %>%
+  mutate(title = reorder(document, gamma * topic)) %>%
+  ggplot(aes(factor(topic), gamma)) +
+  geom_boxplot() +
+  facet_wrap(~ document) +
+  labs(x = "topic", 
+       y = expression(gamma), 
+       title = "Topic Gamma Values for 2 Topics")
+
+```
+
+
+
+```{r lda_2_classify, echo=FALSE, eval=FALSE}
+
+vip.docs2.classification <- vip.docs2 %>%
+  group_by(document) %>%
+  slice_max(gamma) %>%
+  ungroup()
+
+vip.docs2.topics <- vip.tidy %>%
+  group_by(document) %>%
+  mutate(animal_orig = animal) %>%
+  count(document, animal_orig) %>%
+  group_by(document) %>%
+  select(-n)%>%
+  ungroup() 
+
+vip.docs2.topics$topic <- ifelse(vip.docs2.topics$animal_orig == "wolf",1,2)
+vip.docs2.classification$animal_mod <- ifelse(vip.docs2.classification$topic == 1, "wolf", "bear")
+vip.docs2.classification$document <- tolower(vip.docs2.classification$document)
+vip.docs2.misclass <- vip.docs2.classification %>%
+  inner_join(vip.docs2.topics, by = "document") %>%
+  filter(animal_orig != animal_mod)
+
+vip.docs2.misclass %>%
+  count(animal_orig)
+```
+
+## 15 Topic LDA
+
+Let's do 15 topics (the number of codes in the class code book).
+
+What is the probability that a word belongs in a topic?
+
+How would we describe the topics based on these words?
+
+```{r lda_15_beta, echo=FALSE, eval=TRUE, warning=FALSE, fig.dim=c(10,10)}
+vip.lda15 <- LDA(vip.dtm2, k = 15, control = list(seed = 1234))
+
+vip.topics15 <- tidy(vip.lda15, matrix = "beta")
+
+vip.top.terms15 <- vip.topics15 %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 5) %>%
+  ungroup() %>%
+  arrange(topic, -beta) # arrange sorts the data
+
+vip.top.terms15 %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered() + 
+  labs(title = "Term Beta Values for 15 Topics")
+```
+
+
+## 15 Topic LDA Gamma Values
+
+What is the probability that an article is associated with a topic?
+
+```{r lda_15_gamma, echo=FALSE, eval=TRUE, fig.dim=c(10,10)}
+vip.docs15 <- tidy(vip.lda15, matrix = "gamma")
+
+vip.docs15 %>%
+  mutate(title = reorder(document, gamma * topic)) %>%
+  ggplot(aes(factor(topic), gamma)) +
+  geom_boxplot() +
+  facet_wrap(~ document) +
+  labs(x = "topic", 
+       y = expression(gamma),
+       title = "Topic Gamma Values for 15 Topics")
+```
+
+## Most Common Topics
+
+What are the most common topics in the corpus?
+
+
+```{r lda_15_classify, echo=FALSE, eval=TRUE}
+vip.docs15.classification <- vip.docs15 %>%
+  group_by(document) %>%
+  slice_max(gamma) %>%
+  ungroup()
+
+vip.docs15.classification %>%
+  count(topic) %>%
+  ggplot(aes(topic, n, fill=n)) + 
+  geom_bar(stat="identity")
+
+```
+
+
+```{r lda15_common_topics, echo=FALSE, eval=FALSE}
+vip.top.terms15.2 <- vip.topics15 %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+
+vip.top.terms15.2 %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  filter(topic == 1 | topic == 9) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered() + 
+  labs(title = "Term Beta Values for the Most Common Topics")
+
+```
+
+## References
+
+Blei, David M. "Probabilistic topic models." Communications of the ACM 55.4 (2012): 77-84.
+
+Ford, Clay. Reading PDF Files into R for Text Mining, University of Virginia Library, 14 May 2019,            https://data.library.virginia.edu/reading-pdf-files-into-r-for-text-mining/. 
+
+Silge, Julia, and David Robinson. Text mining with R: A tidy approach. " O'Reilly Media, Inc.", 2017.
+
+Stemler, Steve. "An overview of content analysis." Practical assessment, research, and evaluation 7.1 (2000): 17.
