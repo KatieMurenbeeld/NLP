@@ -109,7 +109,7 @@ A **tidy data frame** is the opposite of a sparse matrix. In a tidy data frame:
 - each variable is a column
 - each observation is a row. 
  
-This results in a one-token-per-row data frame (or one-token-per-document-per-row). 
+This results in a one-token-per-row data frame. 
 
 A **token** is a meaningful unit of text. Here a token refers to to a single word (unigram), but in other analyses a token could be pairs of words (bigrams), sentences or paragraphs. 
 
@@ -386,8 +386,8 @@ vip.words <- vip.tidy.sub %>%
   arrange(desc(count))
 
 vip.tf.idf <- vip.words %>%
-  bind_tf_idf(term, title, count) %>%
-  arrange(desc(tf_idf))
+  bind_tf_idf(term, title, count) 
+  #arrange(desc(tf_idf))
 
 #vip.tf.idf %>%
   #select(-total) %>%
@@ -412,15 +412,19 @@ Topic modeling uses algorithms to examine a collection of texts and discover the
 
 ## Latent Dirichlet Allocation (LDA)
 
-Latent dirichlet allocation (LDA) is a probabilistic topic model. The LDA assumes that documents can have multiple topics (i.e. a document is a mixture of topics) and that each topic is made up of a distribution of words. The words within one topic can also occur within another topic's distribution of words.
+- Latent dirichlet allocation (LDA) is a probabilistic topic model.
+- The LDA assumes that documents can have multiple topics (i.e. a document is a mixture of topics) and that each topic is made up of a distribution of words. 
+- The words within one topic can also occur within another topic's distribution of words.
 
 ## How does LDA work?
 
 LDA is a generative model (i.e. it models how a document could be generated) which assumes that: 
 
-1. a set of topics are generated first 
-2. the model randomly chooses a distribution over that collection of topics
-3. for each word in the text, the model will randomly choose a topic from the distribution and then randomly choose a word from the distribution of words associated with the chosen topic (Blei, 2003). 
+- a set of topics are generated first 
+1. the model randomly chooses a distribution over that collection of topics
+- for each word in the document
+2. the model will randomly choose a topic from the distribution
+3. then randomly choose a word from the distribution of words associated with the chosen topic (Blei, 2003). 
 
 ## LDA Parameters
 
