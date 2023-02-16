@@ -31,8 +31,10 @@ urls_test <- urls[1:10]
 df_article <- data.frame()
 
 
-for (url in urls_test){
+for (url in urls){
+  if(url == "") next
   link <- url
+  #if(link == "") next
   page <- GET(link)
   page_text <- content(page, as = 'text')
   text_body <- str_extract_all(page_text, regex("(?<=<p>).+(?=</p>)"), simplify = TRUE) 
