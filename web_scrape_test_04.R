@@ -40,8 +40,9 @@ for (url in urls_test){
   df_article <- rbind(df_article, text)
 }
 
+# Rename and reorder the data frame columns
 colnames(df_article)<-c("article.text")
-df_article <- df_article %>% mutate(id = row_number())
+df_article <- df_article %>% mutate(id = row_number()) %>% select(id, article.text)
 
 
 
