@@ -46,7 +46,8 @@ for (url in urls){
 colnames(df_article)<-c("article.text")
 df_article <- df_article %>% mutate(id = row_number()) %>% select(id, article.text)
 
-
+## There is still a little bit of clean up to do for the text, but this is a better good start!
+## Make sure to rename the csv as something more useful when you read it in and also add an ID column that way the two dataframes can join
 
 #### Code testing below this comment #####
 
