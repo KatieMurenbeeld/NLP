@@ -87,17 +87,7 @@ colnames(my_stop_words) <-("word")
 tidy_df <- tidy_df %>%
   anti_join(my_stop_words)
 
-# Create a document term matrix. You will need this for topic modeling
-# You will need to create a word count for all of the words in a document
-dtm <- tidy_df %>% 
-  count(id, word) %>%
-  cast_dtm(word, id, n)
-
-
-## There is still a little bit of clean up to do for the text, but this is a better good start!
-## Make sure to rename the csv as something more useful when you read it in and also add an ID column that way the two dataframes can join
-## I guess I could also join on Link
-
+# Can create separate data frames for each species using filter()
 tidy_df_bears <- tidy_df %>%
   filter(Species == "Grizzly Bear" | Species == "Grizzly bear")
 tidy_df_beavers <- tidy_df %>%
@@ -106,6 +96,33 @@ tidy_df_boars <- tidy_df %>%
   filter(Species == "Boars")
 tidy_df_wolves <- tidy_df %>%
   filter(Species == "Wolves")
+
+# Create a document term matrix. You will need this for topic modeling
+# You will need to create a word count for all of the words in a document
+dtm <- tidy_df %>% 
+  count(id, word) %>%
+  cast_dtm(word, id, n)
+
+# Can create separate dtms for each species by filtering for species before generating the dtm
+dtm_bears <- tidy_df %>% 
+  filter(Species == "Grizzly Bear" | Species == "Grizzly bear") %>%
+  count(id, word) %>%
+  cast_dtm(word, id, n)
+dtm_beavers <- tidy_df %>% 
+  filter(Species == "Beavers" | Species == "beavers") %>%
+  count(id, word) %>%
+  cast_dtm(word, id, n)
+dtm_boars <- tidy_df %>% 
+  filter(Species == "Boars") %>%
+  count(id, word) %>%
+  cast_dtm(word, id, n)
+dtm_wolves <- tidy_df %>% 
+  filter(Species == "Wolves") %>%
+  count(id, word) %>%
+  cast_dtm(word, id, n)
+
+
+## Plotting
 
 # Plot the most common words in the tidy data frame
 tidy_df %>%
@@ -186,69 +203,9 @@ tidy_df_boars %>%
                    max.words = 100)
 
 
+## Modeling 
 
 
-
-
-
-
-#### Code testing below this comment #####
-
-url <- "https://infoweb.newsbank.com/apps/news/document-view?p=WORLDNEWS&t=continent%3ANorth%2BAmerica%21North%2BAmerica&sort=YMD_date%3AD&page=17&fld-base-0=alltext&maxresults=20&val-base-0=%22grizzly%20bears%22&docref=news/18CE672FEF7A3C60"
-url2 <- "https://infoweb.newsbank.com/apps/news/document-view?p=WORLDNEWS&t=continent%3ANorth%2BAmerica%21North%2BAmerica/country%3AUSA%21USA&sort=YMD_date%3AD&page=2&maxresults=20&f=advanced&val-base-0=%22grizzly%20bears%22&fld-base-0=alltext&docref=news/18D2BD9E847AFCE8"
-#url3 <- "https://infoweb.newsbank.com/apps/news/document-view?p=WORLDNEWS&t=&sort=YMD_date%3AD&fld-base-0=alltext&maxresults=20&val-base-0=Citing%20grizzlies%2C%20groups%20sue%20over%20grazing%20plan%20in%20Paradise%20Valley&docref=news/18C8199AA9C17BD0"
-url3<- "http://www.columbia.edu/~fdc/sample.html"
-
-page <- GET(url)
-page2 <- GET(url2)
-page3 <- GET(url3)
-# You need to be connected to the VPN, otherwise you get text of the javascript telling you to log in. 
-page_text <- content(page, as = 'text') # also seems to work with as = 'parsed'
-page_text
-page_text2 <- content(page2, as = 'text')
-page_text2
-page_text3 <- content(page3, as = 'text')
-page_text3
-lengths(regmatches(page_text, gregexpr("<p>", page_text)))
-lengths(regmatches(page_text2, gregexpr("<p>", page_text2)))
-lengths(regmatches(page_text3, gregexpr("<p>", page_text3)))
-grepl('document-view__body read document-view__body--ascii ', page_text, ignore.case=T) # this is just a check.
-# when you look at the source code on the website, this is the division class that contains the actual article text
-grepl('document-view__body read document-view__body--ascii ', page_text2, ignore.case=T)
-text_body <- str_extract_all(page_text, regex("(?<=<p>).+(?=</p>)"), simplify = TRUE) 
-body <- text_body[[2]]
-body
-text_body2 <- str_extract_all(page_text2, regex("(?<=<p>).+(?=</p>)"), simplify = TRUE) 
-text_body2
-body2 <- text_body2[[2]]
-body2
-text_body3 <- str_extract_all(page_text3, regex("(?<=<p>).+(?=</p>)"), simplify = TRUE) 
-text_body3
-body3 <- text_body3[[2]]
-body3
-
-test_body
-text_df <- tibble(text = body2)
-text_df %>% add_row(text = body2)
-
-tidy_test <- text_df %>% unnest_tokens(word, text)
-
-
-## From here I've been trying to clean up the text more, but having a bit of trouble
-## Since the urls all live within a column of the article_coding.csv, I imagine a script that loops through each url would be easy
-## to make, like you suggested before. 
-
-#text_body <- str_replace_all(text_body, "<br/><br/>" , " ")
-text_body <- str_replace_all(text_body, "[\r\n\t\f\v]" , " ") # This changes it from Data to Values? 
-text_body
-text_df <- tibble(text_body = text)
-
-text_body <- str_replace_all(text_body, "<br/><br/>" , " ")
-text_body <- str_replace_all(text_body, "<stong>" , " ") #not sure why these don't come out?
-text_body <- str_replace_all(text_body, "</stong>" , " ") #not sure why these don't come out?
-text_body
-text_body <- str_replace_all(text_body, "(?<=).+(?=</p>)" , " ")
-text_body
 
 
 
