@@ -290,6 +290,61 @@ tidy_df %>%
   comparison.cloud(colors = c("gray20", "gray80"),
                    max.words = 100)
 
+# Overall Sentiment of Articles
+overall_sent <- tidy_df %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(id, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+ggplot(overall_sent, aes(id, sentiment, fill = sentiment)) + 
+  geom_col(show.legend = FALSE) + 
+  labs(title = "Document Sentiment: Bing Lexicon")
+
+# Now for bears
+overall_sent_bears <- tidy_df_bears %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(id, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+ggplot(overall_sent_bears, aes(id, sentiment, fill = sentiment)) + 
+  geom_col(show.legend = FALSE) + 
+  labs(title = "Document Sentiment: Articles About Bears")
+
+# Now for beavers
+overall_sent_beavers <- tidy_df_beavers %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(id, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+ggplot(overall_sent_beavers, aes(id, sentiment, fill = sentiment)) + 
+  geom_col(show.legend = FALSE) + 
+  labs(title = "Document Sentiment: Articles About Beavers")
+
+# Now for boars
+overall_sent_boars <- tidy_df_boars %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(id, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+ggplot(overall_sent_boars, aes(id, sentiment, fill = sentiment)) + 
+  geom_col(show.legend = FALSE) + 
+  labs(title = "Document Sentiment: Articles About Boars")
+
+# Now for wolves
+overall_sent_wolves <- tidy_df_wolves %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(id, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment = positive - negative)
+
+ggplot(overall_sent_wolves, aes(id, sentiment, fill = sentiment)) + 
+  geom_col(show.legend = FALSE) + 
+  labs(title = "Document Sentiment: Articles About Wolves")
+
 
 ## Modeling 
 
