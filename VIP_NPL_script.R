@@ -1,5 +1,5 @@
 # For the first part of the script (the web scraping) only load these libraries
-# Highlight arguments and options for functions
+# Highlight arguments and options for functions that students can change
 
 library(httr) # for accessing the html from the link
 library(stringr) # for extracting the relevant text
