@@ -101,25 +101,25 @@ tidy_df_wolves <- tidy_df %>%
 # You will need to create a word count for all of the words in a document
 dtm <- tidy_df %>% 
   count(id, word) %>%
-  cast_dtm(word, id, n)
+  cast_dtm(id, word, n)
 
 # Can create separate dtms for each species by filtering for species before generating the dtm
 dtm_bears <- tidy_df %>% 
   filter(Species == "Grizzly Bear" | Species == "Grizzly bear") %>%
   count(id, word) %>%
-  cast_dtm(word, id, n)
+  cast_dtm(id, word, n)
 dtm_beavers <- tidy_df %>% 
   filter(Species == "Beavers" | Species == "beavers") %>%
   count(id, word) %>%
-  cast_dtm(word, id, n)
+  cast_dtm(id, word, n)
 dtm_boars <- tidy_df %>% 
   filter(Species == "Boars") %>%
   count(id, word) %>%
-  cast_dtm(word, id, n)
+  cast_dtm(id, word, n)
 dtm_wolves <- tidy_df %>% 
   filter(Species == "Wolves") %>%
   count(id, word) %>%
-  cast_dtm(word, id, n)
+  cast_dtm(id, word, n)
 
 
 ## Plotting
@@ -348,7 +348,118 @@ ggplot(overall_sent_wolves, aes(id, sentiment, fill = sentiment)) +
 
 ## Modeling 
 
+# Here you can update the k value which sets the number of topics to model
+lda <- LDA(dtm, k = 4, control = list(seed = 1234))
+lda_bears <- LDA(dtm_bears, k = 2, control = list(seed = 1234))
+lda_beavers <- LDA(dtm_beavers, k = 2, control = list(seed = 1234))
+lda_boars <- LDA(dtm_boars, k = 2, control = list(seed = 1234))
+lda_wolves <- LDA(dtm_wolves, k = 2, control = list(seed = 1234))
 
 
+# Get the beta values for each term
+topics <- tidy(lda, matrix = "beta")
 
+terms <- topics %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  # arrange sorts the data
+  arrange(topic, -beta) 
 
+terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered() + 
+  labs(title = "Term Beta Values for 4 Topics")
+
+# Repeat for each species
+topics_bears <- tidy(lda_bears, matrix = "beta")
+
+terms_bears <- topics_bears %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  # arrange sorts the data
+  arrange(topic, -beta) 
+
+terms_bears %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered() + 
+  labs(title = "Term Beta Values for 2 Topics")
+
+# Repeat for each species
+topics_bears <- tidy(lda_bears, matrix = "beta")
+
+terms_bears <- topics_bears %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  # arrange sorts the data
+  arrange(topic, -beta) 
+
+terms_bears %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered() + 
+  labs(title = "Term Beta Values for 2 Topics: Bears")
+
+# Beavers
+topics_beavers <- tidy(lda_beavers, matrix = "beta")
+
+terms_beavers <- topics_beavers %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  # arrange sorts the data
+  arrange(topic, -beta) 
+
+terms_beavers %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered() + 
+  labs(title = "Term Beta Values for 2 Topics: Beavers")
+
+# Boars
+topics_boars <- tidy(lda_boars, matrix = "beta")
+
+terms_boars <- topics_boars %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  # arrange sorts the data
+  arrange(topic, -beta) 
+
+terms_boars %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered() + 
+  labs(title = "Term Beta Values for 2 Topics: Boars")
+
+# Wolves
+topics_wolves <- tidy(lda_wolves, matrix = "beta")
+
+terms_wolves <- topics_wolves %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  # arrange sorts the data
+  arrange(topic, -beta) 
+
+terms_wolves %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered() + 
+  labs(title = "Term Beta Values for 2 Topics: Wolves")
