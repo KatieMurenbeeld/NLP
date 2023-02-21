@@ -140,6 +140,15 @@ tidy_df %>%
 #tidy_df %>% filter(Species == "Beavers") %>%
 
 # Option 2: 
+tidy_df_bears %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n=20) %>%  # set the number of words to show
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_col(fill = "brown") +
+  labs(title = "20 Most Common Words in Articles About Bears", # update the Species
+       y = NULL)
+
 tidy_df_beavers %>%
   count(word, sort = TRUE) %>%
   slice_max(n, n=20) %>%  # set the number of words to show
@@ -173,14 +182,13 @@ tidy_df_wolves %>%
 # You will always need to create a a data frame of sentiment word counts.
 
 # Create data frame of sentiment word counts
-vip.bing.counts <- tidy_df %>%
-  filter(Species == "Boars") %>%
+sent_all <- tidy_df %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
   ungroup()
 
 # Use the sentiment word counts data frame to make the plot
-vip.bing.counts %>%
+sent_all %>%
   group_by(sentiment) %>%
   slice_max(n, n = 10) %>%
   ungroup() %>%
@@ -193,9 +201,89 @@ vip.bing.counts %>%
        y = NULL,
        title = "Most Common Positive and Negative Words in VIP Corpus")
 
+# Now for bears
+sent_bears <- tidy_df_bears %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+# Use the sentiment word counts data frame to make the plot
+sent_bears %>%
+  group_by(sentiment) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word, fill = sentiment)) + 
+  scale_fill_manual(values=c("tan", "brown")) + # change the colors of the bar plot
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(x = "Contribution to sentiment", 
+       y = NULL,
+       title = "Most Common Positive and Negative Words in Articles About Bears")
+
+# Now for beavers
+sent_beavers <- tidy_df_beavers %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+# Use the sentiment word counts data frame to make the plot
+sent_beavers %>%
+  group_by(sentiment) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word, fill = sentiment)) + 
+  scale_fill_manual(values=c("lightblue", "blue")) + # change the colors of the bar plot
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(x = "Contribution to sentiment", 
+       y = NULL,
+       title = "Most Common Positive and Negative Words in Articles About Beavers")
+
+# Now for boars
+sent_boars <- tidy_df_boars %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+# Use the sentiment word counts data frame to make the plot
+sent_boars %>%
+  group_by(sentiment) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word, fill = sentiment)) + 
+  scale_fill_manual(values=c("pink", "red")) + # change the colors of the bar plot
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(x = "Contribution to sentiment", 
+       y = NULL,
+       title = "Most Common Positive and Negative Words in Articles About Boars")
+
+# Now for wolves
+sent_wolves <- tidy_df_wolves %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+# Use the sentiment word counts data frame to make the plot
+sent_wolves %>%
+  group_by(sentiment) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word, fill = sentiment)) + 
+  scale_fill_manual(values=c("gray20", "gray80")) + # change the colors of the bar plot
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(x = "Contribution to sentiment", 
+       y = NULL,
+       title = "Most Common Positive and Negative Words in Articles About Wolves")
+
 # Word clouds
 # Can do for each animal or for the entire corpus
-tidy_df_boars %>%
+tidy_df %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
   acast(word ~ sentiment, value.var = "n", fill = 0) %>%
