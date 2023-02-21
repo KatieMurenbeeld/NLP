@@ -3,6 +3,7 @@ library(stringr) # for extracting the relevant text
 library(tidyverse)
 library(tidytext) # for creating a tidy dataframe from the website text data
 library(dplyr) 
+library(ggplot2)
 
 # set your working directory
 #setwd()
@@ -30,7 +31,6 @@ urls_test <- urls[1:10]
 
 df_article <- data.frame()
 
-
 for (url in urls){
   if(url == "") next
   link <- url
@@ -46,8 +46,58 @@ for (url in urls){
 colnames(df_article)<-c("article.text")
 df_article <- df_article %>% mutate(id = row_number()) %>% select(id, article.text)
 
+# Create a tidy data frame
+tidy_df <- df_article %>% unnest_tokens(word, article.text)
+
+# Remove "stop words"
+data("stop_words")
+tidy_df <- tidy_df %>%
+  anti_join(stop_words)
+
+# Create a small list of stop words for this project (br, strong which are part of the html formatting which should come out before making tidy df)
+my_stop_words <- data.frame(c("br", "strong"))
+colnames(my_stop_words) <-("word")
+
+tidy_df <- tidy_df %>%
+  anti_join(my_stop_words)
+
+
 ## There is still a little bit of clean up to do for the text, but this is a better good start!
 ## Make sure to rename the csv as something more useful when you read it in and also add an ID column that way the two dataframes can join
+
+
+# Plot the most common words in the tidy data frame
+tidy_df %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n=20) %>%  # set the number of words to show
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_col() +
+  labs(title = "20 Most Common Words in the VIP Corpus", # can change the title of the plot
+       y = NULL)
+
+# Sentiment
+
+vip.bing.counts <- tidy_df %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+vip.bing.counts %>%
+  group_by(sentiment) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word, fill = sentiment)) + 
+  scale_fill_manual(values=c("#F8766D", "#00BA38")) + # change the colors of the bar plot
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(x = "Contribution to sentiment", 
+       y = NULL,
+       title = "Most Common Positive and Negative Words")
+
+
+
 
 #### Code testing below this comment #####
 
@@ -84,7 +134,7 @@ body3 <- text_body3[[2]]
 body3
 
 test_body
-text_df <- tibble(text = body)
+text_df <- tibble(text = body2)
 text_df %>% add_row(text = body2)
 
 tidy_test <- text_df %>% unnest_tokens(word, text)
