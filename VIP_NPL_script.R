@@ -12,7 +12,7 @@ library(dplyr) # package to help manipulate data frames
 # article_codes <- read.csv(file = 'articles_2.csv')
 article_codes <- read.csv(file = 'article_coding_20230221.csv')
 
-# check the column headers and make an article ID column
+# remove any rows without a link in the Link column and create an article ID column
 article_codes <- article_codes %>% 
   filter(!Link=='') %>% 
   mutate(id = row_number())
@@ -28,14 +28,13 @@ urls <- article_codes$Link
 # make sure to set simplify = TRUE
 # 4) #3 will result in a 3 column table. We want the second column
 
-# Just for testing the for loop
+# For testing
 # urls_test <- urls[1:10]
 
-# Create an empty dataframe 
+# Before running the for loop, create an empty data frame 
 df_article <- data.frame()
 
-
-# Must be connected to VPN or on campus for this to work.
+### IMPORTANT!!! Must be connected to VPN or on campus for this to work! ###
 
 for (url in urls){ # this was working, but now I am getting an error: Error in content(page, as = "text"): unused argument ("text")
   if(url == "") next
@@ -53,14 +52,15 @@ colnames(df_article)<-c("article.text")
 df_article <- df_article %>% mutate(id = row_number()) %>% select(id, article.text)
 
 # from the article_codes data frame select one or more variables/columns you would like to join to df_article
-# you can update the columns in select to include whatever information you'd like
+# you can update the columns in select() to include whatever information you'd like
 # for example, article type, newspaper, etc. But you need the "id" column so that you can "join" the 2 dataframes
 df_to_join <- article_codes %>% select(id, Species) 
 df_article <- df_article %>% full_join(df_to_join, by = "id")
 
 # Create a tidy data frame and create some plots!
 
-# Load the rest of the libraries (httr doesn't seem to like it when all of these are loaded)
+# Load the rest of the libraries you will need for text analysis and topic modeling
+# If you load these first when trying to use httr::content() in lines 39048 you will get this error: Error in content(page, as = "text"): unused argument ("text") 
 library(tidyverse) # an "opinionated" collection of packages. Includes, dplyr, ggplot2, forcats, tibble, readr, stringr, tidyr, and purr
 library(tidytext) # for creating a tidy dataframe from the website text data
 library(ggplot2) # package for plotting
@@ -70,7 +70,7 @@ library(tm) # package for topic modeling
 library(topicmodels) # package for topic modeling
 
 # Make a tidy data frame by "unnesting" the tokens
-# This automatically remove punctuation and lowercase all words
+# This automatically removes punctuation and will lowercase all words
 tidy_df <- df_article %>% unnest_tokens(word, article.text)
 
 # Remove "stop words" from the SMART lexicon 
@@ -78,7 +78,7 @@ data("stop_words")
 tidy_df <- tidy_df %>%
   anti_join(stop_words)
 
-# Create a small data frame of stop words for this project ("br" and "strong" which are part of the html formatting which should come out before making tidy df)
+# Create a small data frame of stop words for this project ("br" and "strong" are part of the html formatting which should come out before making tidy df!)
 # This needs to be a data frame so that you can use "anti-join()"
 # You can add your own words to this list
 my_stop_words <- data.frame(c("br", "strong")) 
