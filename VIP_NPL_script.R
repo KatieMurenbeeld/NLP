@@ -1,4 +1,5 @@
 # For the first part of the script (the web scraping) only load these libraries
+# Highlight arguments and options for functions
 
 library(httr) # for accessing the html from the link
 library(stringr) # for extracting the relevant text
@@ -78,7 +79,8 @@ data("stop_words")
 tidy_df <- tidy_df %>%
   anti_join(stop_words)
 
-# Create a small data frame of stop words for this project ("br" and "strong" are part of the html formatting which should come out before making tidy df!)
+# Create a small data frame of stop words for this project 
+# ("br" and "strong" are part of the html formatting which should come out before making tidy df!)
 # This needs to be a data frame so that you can use "anti-join()"
 # You can add your own words to this list
 my_stop_words <- data.frame(c("br", "strong")) 
