@@ -1,20 +1,29 @@
 library(httr) # for accessing the html from the link
 library(stringr) # for extracting the relevant text
-library(tidyverse)
-library(tidytext) # for creating a tidy dataframe from the website text data
-library(dplyr) 
-library(ggplot2)
+library(dplyr) # package to help manipulate data frames
+
+#r <- GET("http://httpbin.org/get")
+#text <- content(r, "text")
+
+
+
+
 
 # set your working directory
 #setwd()
 
 # read in the csv with the urls for the articles
-csv <- read.csv(file = 'articles_2.csv')
+article_codes <- read.csv(file = 'articles_2.csv')
+article_codes <- article_codes %>% 
+  filter(!Link=='') %>% 
+  mutate(id = row_number())
 
 # check the column headers and make an article ID column
 
 # create a vector or list of the urls from the csv
-urls <- csv$Link
+urls <- article_codes$Link
+#urls2 <- article_codes %>% select(Link, id)
+#urls <- urls %>% mutate(id = row_number())
 
 #for (url in urls){
 #  print(url)}
@@ -28,10 +37,11 @@ urls <- csv$Link
 # 4) #3 will result in a 3 column table. We want the second column
 
 urls_test <- urls[1:10]
+#urls_test2 <- urls2 %>% slice(1:10)
 
 df_article <- data.frame()
 
-for (url in urls){
+for (url in urls){ # this was working, but now I am getting an error: Error in content(page, as = "text"): unused argument ("text")
   if(url == "") next
   link <- url
   #if(link == "") next
@@ -46,7 +56,20 @@ for (url in urls){
 colnames(df_article)<-c("article.text")
 df_article <- df_article %>% mutate(id = row_number()) %>% select(id, article.text)
 
+df_to_join <- article_codes %>% select(id, Species) # you can update the columns in select to include whatever information you'd like
+# for example, article type, newspaper, etc. But you need the "id" column so that you can "join" the 2 dataframes
+df_article <- df_article %>% full_join(df_to_join, by = "id")
+
 # Create a tidy data frame
+
+# First load the rest of the libraries (httr doesn't seem to like for all of these to be loaded)
+library(tidyverse) # an "opinionated" collection of packages. Includes, dplyr, ggplot2, forcats, tibble, readr, stringr, tidyr, and purr
+library(tidytext) # for creating a tidy dataframe from the website text data
+library(ggplot2) # package for plotting
+library(wordcloud) # package for creating word clouds
+library(tm) # package for topic modeling
+library(topicmodels) # package for topic modeling
+
 tidy_df <- df_article %>% unnest_tokens(word, article.text)
 
 # Remove "stop words"
@@ -55,15 +78,19 @@ tidy_df <- tidy_df %>%
   anti_join(stop_words)
 
 # Create a small list of stop words for this project (br, strong which are part of the html formatting which should come out before making tidy df)
-my_stop_words <- data.frame(c("br", "strong"))
+my_stop_words <- data.frame(c("br", "strong")) # You can add your own words to this list
 colnames(my_stop_words) <-("word")
 
 tidy_df <- tidy_df %>%
   anti_join(my_stop_words)
 
+# Create a document term matrix. You will need this for topic modeling
+#dtm <- tidy_df %>% cast_dtm(id, word)
+
 
 ## There is still a little bit of clean up to do for the text, but this is a better good start!
 ## Make sure to rename the csv as something more useful when you read it in and also add an ID column that way the two dataframes can join
+## I guess I could also join on Link
 
 
 # Plot the most common words in the tidy data frame
@@ -89,7 +116,7 @@ vip.bing.counts %>%
   ungroup() %>%
   mutate(word = reorder(word, n)) %>%
   ggplot(aes(n, word, fill = sentiment)) + 
-  scale_fill_manual(values=c("#F8766D", "#00BA38")) + # change the colors of the bar plot
+  scale_fill_manual(values=c("blue", "pink")) + # change the colors of the bar plot
   geom_col(show.legend = FALSE) + 
   facet_wrap(~sentiment, scales = "free_y") +
   labs(x = "Contribution to sentiment", 
@@ -99,11 +126,21 @@ vip.bing.counts %>%
 
 
 
+
+
+
+
+
+
+
+
+
 #### Code testing below this comment #####
 
 url <- "https://infoweb.newsbank.com/apps/news/document-view?p=WORLDNEWS&t=continent%3ANorth%2BAmerica%21North%2BAmerica&sort=YMD_date%3AD&page=17&fld-base-0=alltext&maxresults=20&val-base-0=%22grizzly%20bears%22&docref=news/18CE672FEF7A3C60"
 url2 <- "https://infoweb.newsbank.com/apps/news/document-view?p=WORLDNEWS&t=continent%3ANorth%2BAmerica%21North%2BAmerica/country%3AUSA%21USA&sort=YMD_date%3AD&page=2&maxresults=20&f=advanced&val-base-0=%22grizzly%20bears%22&fld-base-0=alltext&docref=news/18D2BD9E847AFCE8"
-url3 <- "https://infoweb.newsbank.com/apps/news/document-view?p=WORLDNEWS&t=&sort=YMD_date%3AD&fld-base-0=alltext&maxresults=20&val-base-0=Citing%20grizzlies%2C%20groups%20sue%20over%20grazing%20plan%20in%20Paradise%20Valley&docref=news/18C8199AA9C17BD0"
+#url3 <- "https://infoweb.newsbank.com/apps/news/document-view?p=WORLDNEWS&t=&sort=YMD_date%3AD&fld-base-0=alltext&maxresults=20&val-base-0=Citing%20grizzlies%2C%20groups%20sue%20over%20grazing%20plan%20in%20Paradise%20Valley&docref=news/18C8199AA9C17BD0"
+url3<- "http://www.columbia.edu/~fdc/sample.html"
 
 page <- GET(url)
 page2 <- GET(url2)
