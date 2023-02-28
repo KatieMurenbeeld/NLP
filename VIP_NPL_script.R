@@ -4,13 +4,17 @@
 library(httr) # for accessing the html from the link
 library(stringr) # for extracting the relevant text
 library(dplyr) # package to help manipulate data frames
-
+library(googlesheets4) # package to download google sheets
 
 # Set your working directory
 #setwd()
 
+# Can read in a csv or use googlesheets4 (googlesheets4 would then always let you have the most recent version of the article coding) 
 # read in the csv with the urls for the articles
 article_codes <- read.csv(file = 'article_coding_20230221.csv')
+
+# read in the csv with googlesheets4. Need to have something with permissions....
+#article_codes <- read_sheet('https://docs.google.com/spreadsheets/d/1of5iDf_SF7pHCtXuwpQAGnAhEcOENGwIWcaRg38uAUg/edit#gid=0')
 
 # remove any rows without a link in the Link column and create an article ID column
 article_codes <- article_codes %>% 
@@ -122,7 +126,6 @@ dtm_wolves <- tidy_df %>%
   count(id, word) %>%
   cast_dtm(id, word, n)
 
-
 ## Plotting
 
 # Plot the most common words in the tidy data frame
@@ -134,6 +137,17 @@ tidy_df %>%
   geom_col() +
   labs(title = "20 Most Common Words in the VIP Corpus", # can change the title of the plot
        y = NULL)
+
+# I'd really like to use facet_wrap here for species, but not sure how to make sure to keep Species variable when counting the words
+# tidy_df %>%
+#   count(word, sort = TRUE) %>%
+#   slice_max(n, n=20) %>%  # set the number of words to show
+#   mutate(word = reorder(word, n)) %>%
+#   ggplot(aes(n, word, fill = Species)) +
+#   geom_col() +
+#   #facet_wrap(~Species, ncol = 2, scales = "free_x") + 
+#   labs(title = "20 Most Common Words in the VIP Corpus", # can change the title of the plot
+#        y = NULL)
 
 # Can plot for the different species in 2 ways. Can filter() for the species or 
 # use a pre-filtered data frames (see lines 89-96)
@@ -174,7 +188,7 @@ tidy_df_wolves %>%
   mutate(word = reorder(word, n)) %>%
   ggplot(aes(n, word)) +
   geom_col(fill = "grey") +
-  labs(title = "20 Most Common Words in Articles About Boars", # update the Species
+  labs(title = "20 Most Common Words in Articles About Wolves", # update the Species
        y = NULL)
 
 # To plot the most common positive and negative words 
