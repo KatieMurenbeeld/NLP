@@ -1,0 +1,124 @@
+---
+title: "Intro to NLP coding"
+author: "Matt Williamson"
+date: "2023-02-28"
+output: html_document
+---
+# Loading the libraries
+
+One of the benefits of using `R` is the fact that there is an active community of software developers designing functions to complete all kinds of tasks. Once they've got a set of functions that go well together, they'll package them up into a `library` and that library undergoes a bunch of testing to make sure that everything works properly and that there aren't any risks to users. In order for you to use these packages you first have to call the function that installs them (`install.packages("yourpackagename")`). Once you have the packages installed, you have to load them into your `R` session by calling the `library(yourpackagename)` function (pay attention to the different use of quotes here). We'll do that first so that we have everything we need for the workflow.
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse) #this is actually a whole set of packages designed to different data manipulation tasks. We rely on the dplyr package alot for organizing data and the stringr package for dealing with text
+library(httr) # for accessing the html from the link
+library(tidytext) # for creating a tidy dataframe from the website text data
+library(wordcloud) # package for creating word clouds
+#library(reshape2) # package to restructure and aggregate data
+library(tm) # package for topic modeling
+library(topicmodels) # package for topic modeling
+```
+
+# Reading the data
+
+Before you can actually do anything with our coding data, we need to get it into your `R` **environment**. We'll use the `read.csv()` function to bring in the most recent version of the spreadheet (you'll have to make sure that the name matches whatever you used), and assign it to an object called `article_codes`. Once you've run this, you should see an object called `article_codes` in your **Environment** pane under the **Data** section. You'll see a summary that says the object has 121 observations of 23 variables. As we code more articles, the number of observations should change, but (in general) we aren't adding any more columns. If you see that there are more than 23 variables, you'll want to make sure that things read in correctly.
+
+```{r read}
+# read in the csv with the urls for the articles
+article_codes <- read.csv(file = 'data/article_coding_20230228.csv')
+```
+
+# Downloading the articles
+
+In order to do any natural language processing (NLP), we need to get the actual articles and assign them to a data object in our **Environment**. To do that, we need to clean up the data a little. We remove any of the entries that don't have a link to the article (`filter(!Link=='')` keeps all of the rows where `Link` is not blank). Then we add an `id` column to keep track of which article belongs to each row of our coding dataset (`mutate( id=row_number())` mutates the dataset by creating a new column called `id` and giving it the value that the `row_number()` function returns). Once we have the data cleaned, we need to create a vector of all of the links. We'll do that and assign it to an object called `urls`.
+
+```{r cleancodes}
+article_codes <- article_codes %>% 
+  filter(!Link=='') %>% 
+  mutate(id = row_number())
+
+# create a vector or list of the urls from the csv
+urls <- article_codes$Link
+```
+
+## Looping through the links
+**Note that you shouldn't have to change anything here, this section is just to help you know what is happening**
+
+In order to download and store all of the text, we need to create a container to hold them. We do that by creating an empty data frame called `df_article`. We then use a loop (the `for` and `next` parts) to download each article and store it in the `df_article` object. We then change set the column name for the text to `article.text` and create an `id` column.
+
+```{r downloadarticles}
+df_article <- data.frame()
+
+### IMPORTANT!!! Must be connected to VPN or on campus for this to work! ###
+
+for (url in urls){ # this was working, but now I am getting an error: Error in content(page, as = "text"): unused argument ("text")
+  if(url == "") next
+  link <- url
+  #if(link == "") next
+  page <- GET(link)
+  page_text <- httr::content(page, as = 'text')
+  text_body <- str_extract_all(page_text, regex("(?<=<p>).+(?=</p>)"), simplify = TRUE) 
+  text <- text_body[[2]]
+  df_article <- rbind(df_article, text)
+}
+
+# Rename and reorder the data frame columns
+colnames(df_article) <- c("article.text")
+df_article <- df_article %>% mutate(id = row_number()) %>% select(id, article.text)
+
+```
+
+Now that we have the articles and our coding sheet, we can join the two together so that we can start using the data! The `full_join` function keeps only the rows with matches in both datasets.
+
+```{r joindata}
+# from the article_codes data frame select one or more variables/columns you would like to join to df_article
+# you can update the columns in select() to include whatever information you'd like
+# for example, article type, newspaper, etc. But you need the "id" column so that you can "join" the 2 data frames
+df_to_join <- article_codes %>% select(id, Species) 
+df_article <- df_article %>% full_join(df_to_join, by = "id")
+```
+
+# Cleaning up the text
+
+```{r txtcln}
+# Make a tidy data frame by "unnesting" the tokens
+# This automatically removes punctuation and will lowercase all words
+tidy_df <- df_article %>% unnest_tokens(word, article.text)
+
+# Remove "stop words" using the SMART lexicon 
+data("stop_words")
+tidy_df <- tidy_df %>%
+  anti_join(stop_words)
+
+# Create a small data frame of your own stop words for this project 
+# ("br" and "strong" are part of the html formatting which should come out before making tidy df!)
+# This needs to be a data frame so that you can use "anti-join()"
+# You can add your own words to this list
+my_stop_words <- data.frame(c("br", "strong")) 
+colnames(my_stop_words) <-("word")
+
+tidy_df <- tidy_df %>%
+  anti_join(my_stop_words)
+
+```
+
+```{r speciesfilter}
+species <- c("Grizzly Bear", "Grizzly bear")
+tidy_df_species <- tidy_df %>%
+  filter(Species %in% species)
+
+# Create a document term matrix. You will need this for topic modeling
+# You will need to create a word count for all of the words in a document
+dtm_species <- tidy_df_species %>% 
+  count(id, word) %>%
+  cast_dtm(id, word, n)
+
+tidy_df_species %>%
+  count(word, sort = TRUE) %>%
+  slice_max(n, n=20) %>%  # set the number of words to show
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word)) +
+  geom_col(fill = "brown") +
+  labs(title = "20 Most Common Words in Articles About Bears", # update the Species
+       y = NULL)
+```
