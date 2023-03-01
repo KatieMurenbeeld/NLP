@@ -101,6 +101,7 @@ tidy_df <- tidy_df %>%
   anti_join(my_stop_words)
 
 ```
+## Document Term Matrices
 
 ```{r speciesfilter}
 species <- c("Grizzly Bear", "Grizzly bear")
@@ -119,6 +120,55 @@ tidy_df_species %>%
   mutate(word = reorder(word, n)) %>%
   ggplot(aes(n, word)) +
   geom_col(fill = "brown") +
-  labs(title = "20 Most Common Words in Articles About Bears", # update the Species
+  labs(title = paste("20 Most Common Words in Articles About", species), # update the Species
        y = NULL)
+```
+
+## Sentiment Analyses
+
+```{r sentiment}
+sent_species <- tidy_df_species %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+# Use the sentiment word counts data frame to make the plot
+sent_species %>%
+  group_by(sentiment) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word, fill = sentiment)) + 
+  scale_fill_manual(values=c("tan", "brown")) + # change the colors of the bar plot
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(x = "Contribution to sentiment", 
+       y = NULL,
+       title = paste("20 Most Common Words in Articles About", species))
+
+tidy_df_species %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(id, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment = positive - negative) %>% 
+  ggplot(aes(id, sentiment, fill = sentiment)) + 
+  geom_col(show.legend = FALSE) + 
+  labs(title = paste("Document Sentiment: Articles About", species))
+
+```
+
+## Word Clouds
+
+```{r wordclouds}
+d <- tidy_df_species %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  pivot_wider(id_cols = word, names_from = sentiment, values_from = n, values_fill = 0) %>%
+  column_to_rownames(var="word") %>% 
+  as.matrix() %>% 
+  comparison.cloud(colors = c("blue", "green"),
+                   max.words = 100, match.colors = TRUE)
+
+reshape2::acast(word ~ sentiment, value.var = "n", fill = 0) 
+
 ```
