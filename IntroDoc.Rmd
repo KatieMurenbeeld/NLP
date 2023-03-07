@@ -16,7 +16,13 @@ library(tidytext) # for creating a tidy dataframe from the website text data
 library(wordcloud) # package for creating word clouds
 #library(reshape2) # package to restructure and aggregate data
 library(tm) # package for topic modeling
-library(topicmodels) # package for topic modeling
+library(topicmodels)# package for topic modeling
+library(SnowballC)
+library(googledrive)
+options(
+  gargle_oauth_cache = ".secrets",
+  gargle_oauth_email = TRUE
+)
 ```
 
 # Reading the data
@@ -25,7 +31,14 @@ Before you can actually do anything with our coding data, we need to get it into
 
 ```{r read}
 # read in the csv with the urls for the articles
-article_codes <- read.csv(file = 'data/article_coding_20230228.csv')
+folder_url <- "https://drive.google.com/drive/u/0/folders/1ob5sagTtT3svhc7ZKeemd9TiAq1_MsCL"
+folder <- drive_get(as_id(folder_url))
+
+gdrive_files <- drive_ls(folder)
+id <- gdrive_files[gdrive_files$name == "Article Coding", ]$id
+drive_download(id, path = "data/article_coding.csv")
+
+article_codes <- read.csv(file = 'data/article_coding.csv')
 ```
 
 # Downloading the articles
@@ -68,7 +81,7 @@ df_article <- df_article %>% mutate(id = row_number()) %>% select(id, article.te
 
 ```
 
-Now that we have the articles and our coding sheet, we can join the two together so that we can start using the data! The `full_join` function keeps only the rows with matches in both datasets.
+Now that we have the articles and our coding sheet, we can join the two together so that we can start using the data! The `full_join` function keeps only the rows with matches in both datasets. 
 
 ```{r joindata}
 # from the article_codes data frame select one or more variables/columns you would like to join to df_article
@@ -79,6 +92,8 @@ df_article <- df_article %>% full_join(df_to_join, by = "id")
 ```
 
 # Cleaning up the text
+
+Before we can make much sense of the data, we need to clean things up a bit by removing punctuation, making everything lower-case, and getting rid of words that are so common they overwhelm the actual subject of the articles. The `unnest_tokens` function deals with punctuation and capitalization. The `stop words` dataset is a pre-made set of common words that need to be removed from most articles before we can proceed with language processing. We might decide that we need to remove some additional words beyond the typical ones. We do that by creating the `my_stop_words` object. Finally, we use the `anti_join` function to get rid of all of the words in our corpus that match the words in our stop words object. `anti_join` takes all of the pieces of the first object *NOT* in the second object. Finally, we might "stem" words to get rid of differences in prefixes or suffixes. This helps us avoid treating words like bear and bears as different terms. We use the `wordStem` function to accomplish this.
 
 ```{r txtcln}
 # Make a tidy data frame by "unnesting" the tokens
@@ -98,7 +113,8 @@ my_stop_words <- data.frame(c("br", "strong"))
 colnames(my_stop_words) <-("word")
 
 tidy_df <- tidy_df %>%
-  anti_join(my_stop_words)
+  anti_join(my_stop_words) %>% 
+  mutate(stem = wordStem(word))
 
 ```
 ## Document Term Matrices
@@ -115,10 +131,10 @@ dtm_species <- tidy_df_species %>%
   cast_dtm(id, word, n)
 
 tidy_df_species %>%
-  count(word, sort = TRUE) %>%
+  count(stem, sort = TRUE) %>%
   slice_max(n, n=20) %>%  # set the number of words to show
-  mutate(word = reorder(word, n)) %>%
-  ggplot(aes(n, word)) +
+  mutate(stem = reorder(stem, n)) %>%
+  ggplot(aes(n, stem)) +
   geom_col(fill = "brown") +
   labs(title = paste("20 Most Common Words in Articles About", species), # update the Species
        y = NULL)
