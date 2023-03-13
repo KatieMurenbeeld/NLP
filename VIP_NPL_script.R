@@ -175,6 +175,15 @@ tidy_df %>%
   labs(title = "20 Most Common Words in the VIP Corpus", # can change the title of the plot
        y = NULL)
 
+bigrams_united %>%
+  count(bigram, sort = TRUE) %>%
+  slice_max(n, n=20) %>%  # set the number of words to show
+  mutate(bigram = reorder(bigram, n)) %>%
+  ggplot(aes(n, bigram)) +
+  geom_col() +
+  labs(title = "20 Most Common Bigrams in the VIP Corpus", # can change the title of the plot
+       y = NULL)
+
 # I'd really like to use facet_wrap here for species, but not sure how to make sure to keep Species variable when counting the words
 # tidy_df %>%
 #   count(word, sort = TRUE) %>%
