@@ -72,7 +72,7 @@ library(wordcloud) # package for creating word clouds
 library(reshape2) # package to restructure and aggregate data
 library(tm) # package for topic modeling
 library(topicmodels) # package for topic modeling
-
+library(SnowballC) # to stem words
 # Make a tidy data frame by "unnesting" the tokens
 # This automatically removes punctuation and will lowercase all words
 tidy_df <- df_article %>% unnest_tokens(word, article.text)
@@ -107,6 +107,43 @@ tidy_df_wolves <- tidy_df %>%
 dtm <- tidy_df %>% 
   count(id, word) %>%
   cast_dtm(id, word, n)
+
+# For n-grams
+# First, from the articles dataframe unnest the tokens, but now we will look at bigrams
+# instead of creating a column called "word" we will create a column called "bigram"
+# The type of token will be set to token = "ngrams" and the number of words will be set to 2 (n=2)
+df_bigrams <- df_article %>%
+  unnest_tokens(bigram, article.text, token = "ngrams", n = 2) %>%
+  filter(!is.na(bigram))
+
+
+# In order to remove the stop words we have to first separate out the two words into word1 and word2
+bigrams_separated <- df_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+# Then filter out stopwords and our own stop words for word1 and word2
+bigrams_filtered <- bigrams_separated %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(!word1 %in% my_stop_words$word) %>%
+  filter(!word2 %in% my_stop_words$word) %>% 
+  mutate(stem1 = wordStem(word1)) %>% # not sure if we want to stem the words for bigrams or not, but would do so here.
+  mutate(stem2 = wordStem(word2))
+
+# Then, calculate new bigram counts. This is optional, but good to check. 
+bigram_counts <- bigrams_filtered %>% 
+#  count(word1, word2, sort = TRUE)
+  count(stem1, stem2, sort = TRUE)
+
+# Finally, reunite word1 and word2 back into a single bigram separated by a space (sep = " ")
+bigrams_united <- bigrams_filtered %>%
+#  unite(bigram, word1, word2, sep = " ") %>% 
+  unite(bigram, stem1, stem2, sep = " ")
+
+# From the united bigrams, we can then create a document term matrix
+dtm_bigrams <- bigrams_united %>% 
+  count(id, bigram) %>%
+  cast_dtm(id, bigram, n)
 
 # Can create separate dtms for each species by filtering for species before generating the dtm
 dtm_bears <- tidy_df %>% 
