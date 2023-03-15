@@ -130,6 +130,10 @@ dtm_species <- tidy_df_species %>%
   count(id, word) %>%
   cast_dtm(id, word, n)
 
+dtm_species_stem <- tidy_df_species %>% 
+  count(id, stem) %>%
+  cast_dtm(id, stem, n)
+
 tidy_df_species %>%
   count(stem, sort = TRUE) %>%
   slice_max(n, n=20) %>%  # set the number of words to show
@@ -137,6 +141,51 @@ tidy_df_species %>%
   ggplot(aes(n, stem)) +
   geom_col(fill = "brown") +
   labs(title = paste("20 Most Common Words in Articles About", species), # update the Species
+       y = NULL)
+```
+### Using n-grams
+
+The above analysis relied solely on the occurrence of single words in the text. We might imagine that multiple words occurring together tells us more than just a single word. These groups of words are call _n-grams_ where the _n_ stands for how many words are in a group (i.e., bigrams means 2-word groups). We can run a similar analysis on n-grams here:
+```{r ngrams}
+df_bigrams <- df_article %>%
+  unnest_tokens(bigram, article.text, token = "ngrams", n = 2) %>%
+  filter(!is.na(bigram))
+
+
+# In order to remove the stop words we have to first separate out the two words into word1 and word2
+bigrams_separated <- df_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+# Then filter out stopwords and our own stop words for word1 and word2
+bigrams_filtered <- bigrams_separated %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(!word1 %in% my_stop_words$word) %>%
+  filter(!word2 %in% my_stop_words$word)%>% 
+  mutate(stem1 = wordStem(word1)) %>% # not sure if we want to stem the words for bigrams or not, but would do so here.
+  mutate(stem2 = wordStem(word2))
+
+# Then, calculate new bigram counts. This is optional, but good to check. 
+bigram_counts <- bigrams_filtered %>% 
+#count(word1, word2, sort = TRUE)
+  count(stem1, stem2, sort = TRUE)
+
+bigrams_united <- bigrams_filtered %>%
+#  unite(bigram, word1, word2, sep = " ") %>% 
+  unite(bigram, stem1, stem2, sep = " ")
+
+dtm_bigrams <- bigrams_united %>% 
+  count(id, bigram) %>%
+  cast_dtm(id, bigram, n)
+
+bigrams_united %>% 
+  filter(.,Species == species) %>% 
+  count(bigram, sort=TRUE) %>%
+  slice_max(n, n=20) %>%  # set the number of words to show
+  mutate(bigram = reorder(bigram, n)) %>%
+  ggplot(aes(n, bigram)) +
+  geom_col(fill = "brown") +
+  labs(title = paste("20 Most bigrams in Articles About", species), # update the Species
        y = NULL)
 ```
 
@@ -186,4 +235,44 @@ d <- tidy_df_species %>%
                    max.words = 100, match.colors = TRUE)
 
 
+```
+
+```{r lda}
+dtm_bigrams_species <- bigrams_united %>% 
+  filter(Species==species) %>% 
+  count(id, bigram) %>%
+  cast_dtm(id, bigram, n)
+
+lda_species <- LDA(dtm_species_stem, k = 8, control = list(seed = 1234))
+lda_species_bigrams <- LDA(dtm_species_stem, k=8, control = list(seed = 1234))
+topics <- tidy(lda_species, matrix = "beta")
+topics_bigrams <- tidy(lda_species_bigrams, matrix = "beta")
+
+terms <- topics %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  # arrange sorts the data
+  arrange(topic, -beta) 
+terms_bigrams <- topics_bigrams %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  # arrange sorts the data
+  arrange(topic, -beta) 
+terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered() + 
+  labs(title = "Term Beta Values for 4 Topics")
+
+terms_bigrams %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(beta, term, fill = factor(topic))) + 
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~ topic, scales = "free") + 
+  scale_y_reordered() + 
+  labs(title = "Term Beta Values for 4 Topics")
 ```
