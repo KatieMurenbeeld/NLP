@@ -58,7 +58,7 @@ df_article <- df_article %>% mutate(id = row_number()) %>% select(id, article.te
 # from the article_codes data frame select one or more variables/columns you would like to join to df_article
 # you can update the columns in select() to include whatever information you'd like
 # for example, article type, newspaper, etc. But you need the "id" column so that you can "join" the 2 data frames
-df_to_join <- article_codes %>% select(id, Species) 
+df_to_join <- article_codes %>% select(id, Species, Code1) 
 df_article <- df_article %>% full_join(df_to_join, by = "id")
 
 # Create a tidy data frame and create some plots!
