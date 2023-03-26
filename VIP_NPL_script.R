@@ -75,7 +75,9 @@ library(topicmodels) # package for topic modeling
 library(SnowballC) # to stem words
 # Make a tidy data frame by "unnesting" the tokens
 # This automatically removes punctuation and will lowercase all words
-tidy_df <- df_article %>% unnest_tokens(word, article.text)
+tidy_df <- df_article %>% 
+  select(id, article.text, Species, Code1.x) %>%
+  unnest_tokens(word, article.text)
 
 # Remove "stop words" using the SMART lexicon 
 data("stop_words")
@@ -524,3 +526,16 @@ terms_wolves %>%
   facet_wrap(~ topic, scales = "free") + 
   scale_y_reordered() + 
   labs(title = "Term Beta Values for 2 Topics: Wolves")
+
+
+### Supervised Machine Learning Practice
+## Need to make labels into factors
+
+labeled_df <- tidy_df 
+
+labeled_df$Code1.x <- as.factor(labeled_df$Code1.x)
+
+labeled_dtm <- tidy_df %>% 
+  count(id, word) %>%
+  cast_dtm(id, word, n)
+
