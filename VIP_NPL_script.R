@@ -73,10 +73,11 @@ library(reshape2) # package to restructure and aggregate data
 library(tm) # package for topic modeling
 library(topicmodels) # package for topic modeling
 library(SnowballC) # to stem words
+library(caret) # for classification and regression training
 # Make a tidy data frame by "unnesting" the tokens
 # This automatically removes punctuation and will lowercase all words
 tidy_df <- df_article %>% 
-  select(id, article.text, Species, Code1.x) %>%
+  select(id, article.text, Species, Code1) %>%
   unnest_tokens(word, article.text)
 
 # Remove "stop words" using the SMART lexicon 
@@ -531,11 +532,131 @@ terms_wolves %>%
 ### Supervised Machine Learning Practice
 ## Need to make labels into factors
 
-labeled_df <- tidy_df 
+## Needed to removed the rows without a Code1 label first. Before making tidy_df to make the dtm
+tidy_df2 <- df_article_test %>% 
+  select(id, article.text, Species, Code1) %>%
+  unnest_tokens(word, article.text)
 
-labeled_df$Code1.x <- as.factor(labeled_df$Code1.x)
+tidy_df2 <- tidy_df2 %>%
+  anti_join(stop_words) %>%
+  anti_join(my_stop_words)
 
-labeled_dtm <- tidy_df %>% 
-  count(id, word) %>%
-  cast_dtm(id, word, n)
+
+labeled_df <- tidy_df2
+
+labeled_df$Code1.x <- as.factor(labeled_df$Code1)
+table(labeled_df$Code1.x) %>% prop.table()
+
+#tokens <- labeled_df %>%
+#  count(id, word, sort = TRUE)
+
+labeled_dtm <- labeled_df %>%
+  count(id, word, sort = TRUE) %>%
+  bind_tf_idf(word, id, n) %>%
+  cast_dtm(id, word, tf_idf) # make sure to use tf_idf instead of n
+
+# Split the data into training and testing
+#df_article$Code1 <- as.factor(df_article$Code1) # this is the labeled data
+# Need to drop rows with no Code1 labels
+df_article_test <- df_article[-which(df_article$Code1 == ""), ]
+df_article_test$Code1.x <- as.factor(df_article_test$Code1)
+
+
+trainIndex <- createDataPartition(y = df_article_test$Code1.x, p = 0.7,list = FALSE) # Not sure what the warning means
+# about some classes having a single record because these should all just have one single record?
+
+set.seed(421)
+data_to_train <- labeled_dtm[trainIndex, ] %>% as.matrix() %>% as.data.frame()
+data_to_test <- labeled_dtm[-trainIndex, ] %>% as.matrix() %>% as.data.frame()
+
+label_train <- df_article_test$Code1[trainIndex]
+label_test <- df_article_test$Code1[-trainIndex]
+# Looks like the data was split correctly
+
+# Set the resampling method to bootstrap, useful if applying different machine learning strategies but using the same arguments
+
+trctrl <- trainControl(method = "boot")
+
+
+# Train the model on the training data
+
+## 1. KNN
+knn_model_con <- caret::train(x = data_to_train, #training data
+                              y = as.factor(label_train), #labeled data
+                              method = "knn", #the algorithm
+                              trControl = trctrl, #the resampling strategy we will use
+                              tuneGrid = data.frame(k = 20) #the hyperparameter
+)
+
+# Check out the model metadata
+print(knn_model_con) #print this model
+
+# Test the trained model on the test data
+knn_predict <- predict(knn_model_con, newdata = data_to_test)
+
+# Can look at a confusion matrix to see how well the model did
+knn_confusion_matrix <- confusionMatrix(knn_predict, as.factor(df_article_test$Code1.x[-trainIndex]), mode = "prec_recall")
+knn_confusion_matrix
+
+## 2. SVM
+### Train the model on the training data
+svm_model <- caret::train(x = data_to_train,
+                          y = as.factor(label_train),
+                          method = "svmLinear3",
+                          trControl = trctrl, 
+                          tuneGrid = data.frame(cost = 1, #accounts for over-fitting
+                                                Loss = 2)) #accounts for misclassifications
+### Check the meta data of the model
+print(svm_model)
+
+### Run the trained model on the test data
+svm_predict <- predict(svm_model, newdata = data_to_test)
+
+# Can look at a confusion matrix to see how well the model did
+svm_confusion_matrix <- confusionMatrix(svm_predict, as.factor(df_article_test$Code1.x[-trainIndex]), mode = "prec_recall")
+svm_confusion_matrix
+
+
+## 3. Decision Tree Model
+### Train the model on the training data
+dt_mod <- train(x = data_to_train,
+                y = as.factor(label_train),
+                method = "rpart",
+                trControl = trctrl
+)
+
+### Check the meta data of the model
+print(dt_mod)
+
+### Run the trained model on the test data
+dt_predict <- predict(dt_mod, newdata = data_to_test) 
+
+# Can look at a confusion matrix to see how well the model performed
+dt_confusion_matrix <- confusionMatrix(dt_predict, as.factor(df_article_test$Code1.x[-trainIndex]), mode = "prec_recall")
+dt_confusion_matrix
+
+## 4. Random Forest
+### Train the model on the training data set
+rf_mod <- train(x = data_to_train,
+                y = as.factor(label_train),
+                method = "ranger",
+                trControl = trctrl,
+                tuneGrid = data.frame(mtry = floor(sqrt(dim(data_to_train)[2])),
+                                      splitrule = "extratrees",
+                                      min.node.size = 1))
+### Check the meta data of the model
+print(rf_mod)
+
+### Run the trained model on the test data
+rf_predict <- predict(rf_mod, newdata = data_to_test)
+
+# Can look at a confusion matrix to see how well the model performed
+rf_confusion_matrix <- confusionMatrix(rf_predict, as.factor(df_article_test$Code1.x[-trainIndex]), mode = "prec_recall")
+rf_confusion_matrix
+
+
+## Because there are so many classes/labels for the sake of the VIP I might want to reduce the number 
+## of labels a little bit or make a binary label just to better illustrate the confusion matrix 
+## and how accuracy, recall, and F! scores are calculated. 
+
 
