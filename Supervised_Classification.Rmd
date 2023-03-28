@@ -105,6 +105,8 @@ Before making a tidy dataframe and a document term matrix we first need to remov
 # Here I rename the dataframe so that if anything funny happens we don't have to redownload the articles. 
 df_article_test <- df_article[-which(df_article$Code1 == ""), ]
 # We also need to make the codes "factors". Here we'll create a new column Code1.x which will be factor instead of a character string
+# A character string cannot actually be modeled. When the string is made into a factor, 
+# the string is put into a bin, and the computer can view it as categorical data
 df_article_test$Code1.x <- as.factor(df_article_test$Code1)
 
 # Make a tidy data frame by "unnesting" the tokens
@@ -195,14 +197,12 @@ dtm <- tidy_df %>%
 With most (supervised) machine learning algorithms, the machine "learns" by training a model on a subset of the data which is labeled. Then, we use the resulting "trained" model to make predictions on the subset of that data for testing. In general, the split for training and testing is 70/30.
 
 ```{r split_train_test}
+# First set a seed. Since this is a random process, setting the seed allows others to get the same output.
+set.seed(455)
 
 # Create a training index. Here use Code2.x to have only 2 classes.
 #trainIndex <- createDataPartition(y = df_article_test$Code1.x, p = 0.7,list = FALSE)
 trainIndex <- createDataPartition(y = df_article_test$Code2.x, p = 0.7,list = FALSE)
-
-# Using that index we will...
-# First set a seed. Since this is a random process, setting the seed allows others to get the same output.
-set.seed(455)
 
 # In the next lines
 data_to_train <- dtm[trainIndex, ] %>% as.matrix() %>% as.data.frame()
@@ -216,6 +216,8 @@ Now that we have our training set, testing set, and the labels we can start work
 1. Train the model using the training dataset
 2. Use the trained model to make classification predictions on the testing dataset
 3. Check the model performance. In this case we will look at a "Confusion Matrix" as well as the accuracy and F1 score.
+
+
 
 ## KNN: K-Nearest Neighbors
 
@@ -263,7 +265,7 @@ And the F1 score is 0.88
 
 ```{r svm}
 # 1. Train the model on the training data
-svm_model <- caret::train(x = data_to_train,
+svm_model <- train(x = data_to_train,
                           y = as.factor(label_train),
                           method = "svmLinear3",
                           trControl = trctrl, 
