@@ -90,7 +90,7 @@ df_article <- df_article %>% full_join(df_to_join, by = "id")
 
 We will use the labeled data (i.e. the coded articles) to start building a supervised machine learning classification model. (Yay!)
 
-To start out with the code, we will simplfy our data by reducing the codes down from 20 to 2. this will help us learn some of the basics of classification as well as the performance metrics for the models. 
+To start out with the code, we will simplify our data by reducing the codes down from 20 to 2. this will help us learn some of the basics of classification as well as the performance metrics for the models. 
 
 The most important thing to remember with supervised models, is that we will be providing the "answers" to the model so that it can "learn". This is different from the topic modeling we did previously.
 
@@ -174,7 +174,7 @@ tidy_df$Code2[tidy_df$Code2 != "Problem is people"] <- "Other"
 ```
 
 
-Now that we have a tidy dataframe with the uncoded rows removed we can make, or *cast*, the tidy frame into a document term matrix. In this case we will include the term frequency - inverse document frequency (tf-idf) because this we tell us the most relevant or important words for each document. 
+Now that we have a tidy dataframe with the uncoded rows removed we can make, or *cast*, the tidy frame into a document term matrix. In this case we will include the term frequency - inverse document frequency (tf-idf) because this we tell us the most relevant, important, or unique words for each document. We could also use the word counts, but for supervised machine learning the tf-idf will tell us a little more information. "To put it another way: we can actually compare words based on how unique they are to a document using tf_idf" (https://bookdown.org/josephine_lukito/j381m_tutorials/data-wrangling.html#tf-idf)
 
 ```{r create_dtm}
 
