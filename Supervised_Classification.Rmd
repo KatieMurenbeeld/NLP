@@ -1,0 +1,357 @@
+---
+title: "Supervised_Classification"
+author: "Katie Murenbeeld"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Loading the libraries
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse) #this is actually a whole set of packages designed to different data manipulation tasks. We rely on the dplyr package alot for organizing data and the stringr package for dealing with text
+library(httr) # for accessing the html from the link
+library(tidytext) # for creating a tidy dataframe from the website text data
+library(wordcloud) # package for creating word clouds
+#library(reshape2) # package to restructure and aggregate data
+library(tm) # package for topic modeling
+library(topicmodels)# package for topic modeling
+library(SnowballC)
+library(googledrive)
+options(
+  gargle_oauth_cache = ".secrets",
+  gargle_oauth_email = TRUE
+)
+library(caret) # for classification and regression training
+```
+
+# Reading the data
+
+Here the article codes .csv will act as our labeled data. 
+
+```{r read}
+# read in the csv with the urls for the articles
+folder_url <- "https://drive.google.com/drive/u/0/folders/1ob5sagTtT3svhc7ZKeemd9TiAq1_MsCL"
+folder <- drive_get(as_id(folder_url))
+
+gdrive_files <- drive_ls(folder)
+id <- gdrive_files[gdrive_files$name == "Article Coding", ]$id
+drive_download(id, path = "data/article_coding.csv", overwrite = TRUE)
+
+article_codes <- read.csv(file = 'data/article_coding.csv')
+``` 
+
+# Downloading the articles
+
+```{r cleancodes}
+article_codes <- article_codes %>% 
+  filter(!Link=='') %>% 
+  mutate(id = row_number())
+
+# create a vector or list of the urls from the csv
+urls <- article_codes$Link
+```
+
+## Looping through the links
+
+```{r downloadarticles}
+df_article <- data.frame()
+
+### IMPORTANT!!! Must be connected to VPN or on campus for this to work! ###
+
+for (url in urls){ # this was working, but now I am getting an error: Error in content(page, as = "text"): unused argument ("text")
+  if(url == "") next
+  link <- url
+  #if(link == "") next
+  page <- GET(link)
+  page_text <- httr::content(page, as = 'text')
+  text_body <- str_extract_all(page_text, regex("(?<=<p>).+(?=</p>)"), simplify = TRUE) 
+  text <- text_body[[2]]
+  df_article <- rbind(df_article, text)
+}
+
+# Rename and reorder the data frame columns
+colnames(df_article) <- c("article.text")
+df_article <- df_article %>% mutate(id = row_number()) %>% select(id, article.text)
+
+```
+
+Now that we have the articles and our coding sheet, we can join the two together so that we can start using the data! The `full_join` function keeps only the rows with matches in both datasets. 
+
+```{r joindata}
+# from the article_codes data frame select one or more variables/columns you would like to join to df_article
+# you can update the columns in select() to include whatever information you'd like
+# for example, article type, newspaper, etc. But you need the "id" column so that you can "join" the 2 data frames
+df_to_join <- article_codes %>% select(id, Species, Code1) 
+df_article <- df_article %>% full_join(df_to_join, by = "id")
+```
+
+# Supervised Machine Learning Practice
+
+We will use the labeled data (i.e. the coded articles) to start building a supervised machine learning classification model. (Yay!)
+
+To start out with the code, we will simplfy our data by reducing the codes down from 20 to 2. this will help us learn some of the basics of classification as well as the performance metrics for the models. 
+
+The most important thing to remember with supervised models, is that we will be providing the "answers" to the model so that it can "learn". This is different from the topic modeling we did previously.
+
+With most (supervised) machine learning algorithms, the machine "learns" by training a model on a subset of the data which is labeled. Then, we use the resulting "trained" model to make predictions on the testing subset of that data.
+
+## Data Wrangling 
+
+Before making a tidy dataframe and a document term matrix we first need to remove any rows or articles without a Code1. After we remove the specified rows we can clean up the data like before: remove stop words, stem, etc.
+
+```{r remove_no_code1}
+# Make a new dataframe with the rows with no Code1 removed.
+# Here I rename the dataframe so that if anything funny happens we don't have to redownload the articles. 
+df_article_test <- df_article[-which(df_article$Code1 == ""), ]
+# We also need to make the codes "factors". Here we'll create a new column Code1.x which will be factor instead of a character string
+df_article_test$Code1.x <- as.factor(df_article_test$Code1)
+
+# Make a tidy data frame by "unnesting" the tokens
+# This automatically removes punctuation and will lowercase all words
+# Note that we don't need to include Code1.x in this case
+tidy_df <- df_article_test %>% 
+   select(id, article.text, Species, Code1) %>%
+  unnest_tokens(word, article.text)
+
+# Remove "stop words" using the SMART lexicon 
+data("stop_words")
+tidy_df <- tidy_df %>%
+  anti_join(stop_words)
+
+# Create a small data frame of your own stop words for this project 
+# ("br" and "strong" are part of the html formatting which should come out before making tidy df!)
+# This needs to be a data frame so that you can use "anti-join()"
+# You can add your own words to this list
+my_stop_words <- data.frame(c("br", "strong")) 
+colnames(my_stop_words) <-("word")
+
+tidy_df <- tidy_df %>%
+  anti_join(my_stop_words) %>% 
+  mutate(stem = wordStem(word))
+
+```
+
+## What are the most common codes? 
+
+```{r common_codes}
+df_article_test %>%
+  count(Code1, sort = TRUE) %>%
+  slice_max(n, n=20) %>%  # set the number of codes to show
+  mutate(Code1 = reorder(Code1, n)) %>%
+  ggplot(aes(n, Code1)) +
+  geom_col(fill = "blue") +
+  labs(title = paste("Top Codes per Article"), 
+       y = NULL)
+
+tidy_df %>%
+  count(Code1, sort = TRUE) %>%
+  slice_max(n, n=20) %>%  # set the number of codes to show
+  mutate(Code1 = reorder(Code1, n)) %>%
+  ggplot(aes(n, Code1)) +
+  geom_col(fill = "lightblue") +
+  labs(title = paste("Top Codes per Word"), 
+       y = NULL)
+```
+
+One thing we could do to help illustrate the supervised learning for education purpose is to make the labels binary. So we could have "Problem is people" and then "Other".
+
+```{r recode_tidy_df}
+
+# Replace the values in the df_article. I feel like this should be easy, but I cannot figure it out.
+#df_article_test %>% 
+#    mutate(Code2 = replace(Code1, Code1 != "Problem is people", "Other"))
+
+df_article_test$Code2 <- df_article_test$Code1
+df_article_test$Code2[df_article_test$Code2 != "Problem is people"] <- "Other"
+
+# Make this a factor as well
+df_article_test$Code2.x <- as.factor(df_article_test$Code2)
+
+# Replace the values in the tidy_df
+tidy_df$Code2 <- tidy_df$Code1
+tidy_df$Code2[tidy_df$Code2 != "Problem is people"] <- "Other"   
+```
+
+
+Now that we have a tidy dataframe with the uncoded rows removed we can make, or *cast*, the tidy frame into a document term matrix. In this case we will include the term frequency - inverse document frequency (tf-idf) because this we tell us the most relevant or important words for each document. 
+
+```{r create_dtm}
+
+# To create the dtm we use the tidy dataframe
+# We calculate the term frequency using the count() function
+# We then use bind_tf_idf() function to calculate the tf-idf
+# Finally we "cast" the tidy dataframe into the document term matrix (dtm) making sure that we use tf-idf as the variable of interest
+
+dtm <- tidy_df %>%
+  count(id, word, sort = TRUE) %>%
+  bind_tf_idf(word, id, n) %>% 
+  cast_dtm(id, word, tf_idf) 
+
+```
+
+## Splitting the data into a "training" set and a "test" set
+
+With most (supervised) machine learning algorithms, the machine "learns" by training a model on a subset of the data which is labeled. Then, we use the resulting "trained" model to make predictions on the subset of that data for testing. In general, the split for training and testing is 70/30.
+
+```{r split_train_test}
+
+# Create a training index. Here use Code2.x to have only 2 classes.
+#trainIndex <- createDataPartition(y = df_article_test$Code1.x, p = 0.7,list = FALSE)
+trainIndex <- createDataPartition(y = df_article_test$Code2.x, p = 0.7,list = FALSE)
+
+# Using that index we will...
+# First set a seed. Since this is a random process, setting the seed allows others to get the same output.
+set.seed(455)
+
+# In the next lines
+data_to_train <- dtm[trainIndex, ] %>% as.matrix() %>% as.data.frame()
+data_to_test <- dtm[-trainIndex, ] %>% as.matrix() %>% as.data.frame()
+
+label_train <- df_article_test$Code2.x[trainIndex]
+
+```
+
+Now that we have our training set, testing set, and the labels we can start working through some different supervised machine learning models. In general you will always follow the same steps:
+1. Train the model using the training dataset
+2. Use the trained model to make classification predictions on the testing dataset
+3. Check the model performance. In this case we will look at a "Confusion Matrix" as well as the accuracy and F1 score.
+
+## KNN: K-Nearest Neighbors
+
+```{r knn}
+# Set the resampling method to bootstrap, useful if applying different machine learning strategies but using the same arguments
+trctrl <- trainControl(method = "boot")
+
+# 1. Train the model
+knn_model_con <- train(x = data_to_train, #training data
+                              y = as.factor(label_train), #labeled data
+                              method = "knn", #the algorithm
+                              trControl = trctrl, #the resampling strategy we will use
+                              tuneGrid = data.frame(k = 2) #the hyperparameter
+)
+
+# 2. Test the trained model on the test data
+knn_predict <- predict(knn_model_con, newdata = data_to_test)
+
+# 3. Check the model performance
+# You can look at a confusion matrix to see how well the model did
+knn_confusion_matrix <- confusionMatrix(knn_predict, as.factor(df_article_test$Code2.x[-trainIndex]), mode = "prec_recall")
+knn_confusion_matrix
+
+```
+
+This model performed really well. 
+
+Here is a great article that explains the confusion matrix and the performance metrics. https://medium.com/analytics-vidhya/confusion-matrix-accuracy-precision-recall-f1-score-ade299cf63cd 
+
+Accuracy = (TN + TP) / (TN + TP + FN + FP) The ratio of correctly classified instances to all instances. 
+
+Precision = TP / (TP + FP) The ratio of correctly classified positives (TP) to all classified positives (TP + FP)
+
+Recall = TP / (TP + FN) The ratio of correctly classified positive (TP) to what **should** have been classified as positives (TP + FN)
+
+F1 = 2 x ((precision x recall) / (precision + recall)) The harmonic mean of precision and recall. 
+
+
+The Accuracy is 0.79
+Precision is 0.88
+Recall is 0.88
+And the F1 score is 0.88
+
+# SVM: Support Vector Machines
+
+```{r svm}
+# 1. Train the model on the training data
+svm_model <- caret::train(x = data_to_train,
+                          y = as.factor(label_train),
+                          method = "svmLinear3",
+                          trControl = trctrl, 
+                          tuneGrid = data.frame(cost = 1, #accounts for over-fitting
+                                                Loss = 2)) #accounts for misclassifications
+
+# 2. Test the trained model on the test data
+svm_predict <- predict(svm_model, newdata = data_to_test)
+
+# 3. Check the model performance
+# You can look at a confusion matrix to see how well the model did
+svm_confusion_matrix <- confusionMatrix(svm_predict, as.factor(df_article_test$Code2.x[-trainIndex]), mode = "prec_recall")
+svm_confusion_matrix
+```
+
+This model did not perform nearly as well as the KNN. 
+
+The Accuracy is 0.49
+Precision is 0.78
+Recall is 0.55
+And the F1 score is 0.64
+
+# Decision Trees
+
+```{r dt}
+
+# 1. Train the model on the training data
+dt_mod <- train(x = data_to_train,
+                y = as.factor(label_train),
+                method = "rpart",
+                trControl = trctrl
+)
+
+# 2. Test the trained model on the test data
+dt_predict <- predict(dt_mod, newdata = data_to_test) 
+
+# 3. Check the model performance
+# You can look at a confusion matrix to see how well the model did
+dt_confusion_matrix <- confusionMatrix(dt_predict, as.factor(df_article_test$Code2.x[-trainIndex]), mode = "prec_recall")
+dt_confusion_matrix
+```
+
+This model performed exceptionally well! 
+
+The Accuracy is 0.85
+Precision is 0.85
+Recall is 1.00
+And the F1 score is 0.92
+
+# Random Forests
+
+```{r rt}
+
+# 1. Train the model on the training data
+rf_mod <- train(x = data_to_train,
+                y = as.factor(label_train),
+                method = "ranger",
+                trControl = trctrl,
+                tuneGrid = data.frame(mtry = floor(sqrt(dim(data_to_train)[2])),
+                                      splitrule = "extratrees",
+                                      min.node.size = 1))
+
+# 2. Test the trained model on the test data
+rf_predict <- predict(rf_mod, newdata = data_to_test)
+
+# 3. Check the model performance
+# You can look at a confusion matrix to see how well the model did
+rf_confusion_matrix <- confusionMatrix(rf_predict, as.factor(df_article_test$Code2.x[-trainIndex]), mode = "prec_recall")
+rf_confusion_matrix
+```
+This model also performed exceptionally well! 
+
+The Accuracy is 0.85
+Precision is 0.85
+Recall is 1.00
+And the F1 score is 0.92
+
+# What about with all 20 codes? 
+
+I ran this previously, and none of the models performed well at all. 
+
+With all 20 codes, none of these models performed particularly well (best accuracy was ~0.15), but that's ok! This will help us to move forward by: 
+1) Clean up the labeled dataset (for example, we have repeating codes which)
+2) Think about how to split the data.  
+3) Should we use term frequency for each code instead of tf-idf?
+4) Start testing out some of the parameters (not really discussed here, but we can optimize these parameters)
+5) Think about whether we want to reduce some of the codes. I don't think this will be needed, mostly I just need to work on this script more and think a little more about what is going on.
+
+
+
+
