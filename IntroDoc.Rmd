@@ -210,7 +210,7 @@ sent_species %>%
   labs(x = "Contribution to sentiment", 
        y = NULL,
        title = paste("20 Most Common Words in Articles About", species))
-ggsave("sentiment_contribution_beavers.png")
+#ggsave("sentiment_contribution_beavers.png")
 
 tidy_df_species %>%
   inner_join(get_sentiments("bing")) %>%
@@ -222,13 +222,15 @@ tidy_df_species %>%
   labs(title = paste("Document Sentiment: Articles About", species)) + 
   ylab("Sentiment") + xlab("Document ID")
 
-ggsave("sentiment_documents_beavers.png")
+#ggsave("sentiment_documents_beavers.png")
 
 ```
 
 ## Word Clouds
 
 ```{r wordclouds}
+png("beavers_wordcloud.png", width = 480, height = 480) # to save the word cloud as a png havee to specify the png file first
+# Then create the word cloud
 d <- tidy_df_species %>%
   inner_join(get_sentiments("bing")) %>%
   count(word, sentiment, sort = TRUE) %>%
@@ -237,8 +239,10 @@ d <- tidy_df_species %>%
   as.matrix() %>% 
   comparison.cloud(colors = c("blue", "green"),
                    max.words = 100, match.colors = TRUE)
+# dev.off() will turn off the "device". In this case the plotting device.
+# This means you can move on to another plot with no issues.
+dev.off()
 
-#ggsave("sentiment_wordcloud_beavers.png")
 ```
 
 ```{r lda}
