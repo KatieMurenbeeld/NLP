@@ -1,0 +1,191 @@
+---
+title: "USR_2023_Figures"
+author: "Katie Murenbeeld"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse) #this is actually a whole set of packages designed to different data manipulation tasks. We rely on the dplyr package alot for organizing data and the stringr package for dealing with text
+library(httr) # for accessing the html from the link
+library(tidytext) # for creating a tidy dataframe from the website text data
+library(wordcloud) # package for creating word clouds
+#library(reshape2) # package to restructure and aggregate data
+library(tm) # package for topic modeling
+library(topicmodels)# package for topic modeling
+library(SnowballC)
+library(googledrive)
+options(
+  gargle_oauth_cache = ".secrets",
+  gargle_oauth_email = TRUE
+)
+```
+
+```{r read}
+# read in the csv with the urls for the articles
+folder_url <- "https://drive.google.com/drive/u/0/folders/1ob5sagTtT3svhc7ZKeemd9TiAq1_MsCL"
+folder <- drive_get(as_id(folder_url))
+
+gdrive_files <- drive_ls(folder)
+id <- gdrive_files[gdrive_files$name == "Article Coding", ]$id
+drive_download(id, path = "data/article_coding.csv", overwrite = TRUE)
+
+article_codes <- read.csv(file = 'data/article_coding.csv')
+```
+
+```{r cleancodes}
+article_codes <- article_codes %>% 
+  filter(!Link=='') %>% 
+  filter(!Species == "Wolves") %>%
+  filter(!Article.Type == "NA") %>%
+  mutate(id = row_number())
+
+# create a vector or list of the urls from the csv
+urls <- article_codes$Link
+```
+
+```{r downloadarticles}
+df_article <- data.frame()
+
+### IMPORTANT!!! Must be connected to VPN or on campus for this to work! ###
+
+for (url in urls){ # this was working, but now I am getting an error: Error in content(page, as = "text"): unused argument ("text")
+  if(url == "") next
+  link <- url
+  #if(link == "") next
+  page <- GET(link)
+  page_text <- httr::content(page, as = 'text')
+  text_body <- str_extract_all(page_text, regex("(?<=<p>).+(?=</p>)"), simplify = TRUE) 
+  text <- text_body[[2]]
+  df_article <- rbind(df_article, text)
+}
+
+# Rename and reorder the data frame columns
+colnames(df_article) <- c("article.text")
+df_article <- df_article %>% mutate(id = row_number()) %>% select(id, article.text)
+
+```
+
+```{r joindata}
+# from the article_codes data frame select one or more variables/columns you would like to join to df_article
+# you can update the columns in select() to include whatever information you'd like
+# for example, article type, newspaper, etc. But you need the "id" column so that you can "join" the 2 data frames
+df_to_join <- article_codes %>% select(id, Species, Code1) 
+df_article <- df_article %>% full_join(df_to_join, by = "id")
+```
+
+```{r txtcln}
+# Want to take out the Wolves articles
+#df_article_nowolf <- df_article[-which(df_article$Species == "Wolves"), ]
+
+
+# Make a tidy data frame by "unnesting" the tokens
+# This automatically removes punctuation and will lowercase all words
+tidy_df <- df_article %>% 
+  select(id, article.text, Species, Code1) %>%
+  unnest_tokens(word, article.text)
+
+# Remove "stop words" using the SMART lexicon 
+data("stop_words")
+tidy_df <- tidy_df %>%
+  anti_join(stop_words)
+
+# Create a small data frame of your own stop words for this project 
+# ("br" and "strong" are part of the html formatting which should come out before making tidy df!)
+# This needs to be a data frame so that you can use "anti-join()"
+# You can add your own words to this list
+my_stop_words <- data.frame(c("br", "strong")) 
+colnames(my_stop_words) <-("word")
+
+tidy_df <- tidy_df %>%
+  anti_join(my_stop_words) %>% 
+  mutate(stem = wordStem(word))
+
+```
+
+## Sentiment Analyses
+
+```{r sentiment}
+sent <- tidy_df %>%
+  inner_join(get_sentiments("bing")) %>%
+  group_by(Species) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+# Use the sentiment word counts data frame to make the plot
+# I think we want to use facet wrap here
+sent %>%
+  group_by(sentiment) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(n, word, fill = Species)) +
+  geom_col(show.legend = TRUE) + 
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(x = "Contribution to sentiment", 
+       y = NULL,
+       title = paste("20 Most Common Words in Articles About Bears, Boars, and Beavers"))
+#ggsave("sentiment_contribution_beavers.png")
+
+tidy_df %>%
+  inner_join(get_sentiments("bing")) %>%
+  group_by(Species) %>%
+  count(id, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(sentiment = positive - negative) %>% 
+  ggplot(aes(id, sentiment, fill = Species)) + 
+  geom_col(show.legend = TRUE) + 
+  labs(title = paste("Document Sentiment: Articles About Bears, Boars, and Beavers")) + 
+  ylab("Sentiment") + xlab("Document ID")
+
+#ggsave("sentiment_documents_beavers.png")
+
+```
+
+# Map 
+Need a base map of states
+Need three points within the states, one for each species
+For data frame I need a count of the articles by species by state
+  Columns: State Species Count
+  
+```{r map_data}
+
+# Set up the data frame
+
+df_state_to_join <- article_codes %>% select(id, Species, Code1, Publication.State) 
+df_states <- df_article %>% full_join(df_state_to_join, by = "id")
+
+df_states_counts <- df_states %>%
+  filter(!Publication.State == "") %>%
+  group_by(Species.x, Publication.State) %>%
+  count(Publication.State, Species.x)
+
+df_state_locs <- read_csv("states_centers.csv")
+
+df_states_map <- df_states_counts %>%
+  inner_join(df_state_locs, by = c('Publication.State'='state'))
+
+```
+
+```{r map}
+state_info <- map_data("state")
+us_map <- ggplot(data = state_info, mapping = aes(x = long, y = lat, group = group)) + 
+  geom_polygon(color = "black", fill = "white") + 
+  coord_quickmap() + 
+  theme_void()
+
+map_with_data <- us_map + 
+  geom_point(data = df_states_map, aes(x = longitude, y = latitude, color=Species.x, size=n, group = n), position=position_jitter(h=0.75,w=0.75))
+
+map_with_data
+```
+
+
+
+
+
+
+
+
+
