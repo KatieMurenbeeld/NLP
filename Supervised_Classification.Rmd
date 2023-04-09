@@ -230,7 +230,7 @@ knn_model_con <- train(x = data_to_train, #training data
                               y = as.factor(label_train), #labeled data
                               method = "knn", #the algorithm
                               trControl = trctrl, #the resampling strategy we will use
-                              tuneGrid = data.frame(k = 2) #the hyperparameter
+                              tuneGrid = data.frame(k = 2) #the hyperparameter, how many neighbors to look for
 )
 
 # 2. Test the trained model on the test data
