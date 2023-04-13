@@ -20,6 +20,7 @@ options(
   gargle_oauth_cache = ".secrets",
   gargle_oauth_email = TRUE
 )
+library(usmap)
 ```
 
 ```{r read}
@@ -128,6 +129,8 @@ sent %>%
        title = paste("20 Most Common Words in Articles About Bears, Boars, and Beavers"))
 #ggsave("sentiment_contribution_beavers.png")
 
+species_colors <- c("Beavers" = "#333BFF", "Boars" = "#CC6600", "Grizzly Bear" = "#9633FF")
+
 tidy_df %>%
   inner_join(get_sentiments("bing")) %>%
   group_by(Species) %>%
@@ -137,7 +140,8 @@ tidy_df %>%
   ggplot(aes(id, sentiment, fill = Species)) + 
   geom_col(show.legend = TRUE) + 
   labs(title = paste("Document Sentiment: Articles About Bears, Boars, and Beavers")) + 
-  ylab("Sentiment") + xlab("Document ID")
+  ylab("Sentiment") + xlab("Document ID") + 
+  scale_fill_manual(values=species_colors)
 
 #ggsave("sentiment_documents_beavers.png")
 
@@ -181,7 +185,30 @@ map_with_data <- us_map +
 map_with_data
 ```
 
+```{r map_testing}
 
+transformed_data <- usmap_transform(df_states_map, input_names = c("longitude", "latitude"),
+  output_names = c("x", "y")) %>%
+  rename(Species = Species.x)
+
+#test_base <- plot_usmap()
+
+test_with_data <- plot_usmap('states') + 
+  geom_point(data = transformed_data, aes(x = x, y = y, color=Species, size=n), 
+  position=position_jitter(h=80000,w=75000)) + 
+  scale_size_area(breaks = c(1, 10, 20, 30),
+                  limits = c(1, 32)) + 
+  scale_color_manual(values=species_colors)
+
+
+test_with_data
+
+```
+
+
+## Try to get Alaska and Hawaii on there nicely
+
+Matt suggested looking at st_centroid()
 
 
 
