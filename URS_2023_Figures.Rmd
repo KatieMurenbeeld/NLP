@@ -210,6 +210,10 @@ test_with_data
 
 Matt suggested looking at st_centroid()
 
+I ended up using usmap (plot_usmap()) and transforming the data using usmap_transform()
+
+I still need to fix Montana. There is a boar article there that keeps getting overshadowed by all the Bear articles. 
+
 
 
 
