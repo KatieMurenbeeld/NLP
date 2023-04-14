@@ -111,25 +111,10 @@ tidy_df <- tidy_df %>%
 sent <- tidy_df %>%
   inner_join(get_sentiments("bing")) %>%
   group_by(Species) %>%
-  count(word, sentiment, sort = TRUE) %>%
+  count(stem, sentiment, sort = TRUE) %>%
   ungroup()
 
-# Use the sentiment word counts data frame to make the plot
-# I think we want to use facet wrap here
-sent %>%
-  group_by(sentiment) %>%
-  slice_max(n, n = 10) %>%
-  ungroup() %>%
-  mutate(word = reorder(word, n)) %>%
-  ggplot(aes(n, word, fill = Species)) +
-  geom_col(show.legend = TRUE) + 
-  facet_wrap(~sentiment, scales = "free_y") +
-  labs(x = "Contribution to sentiment", 
-       y = NULL,
-       title = paste("20 Most Common Words in Articles About Bears, Boars, and Beavers"))
-#ggsave("sentiment_contribution_beavers.png")
-
-species_colors <- c("Beavers" = "#333BFF", "Boars" = "#CC6600", "Grizzly Bear" = "#9633FF")
+species_colors <- c("Beavers" = "#005AB5", "Boars" = "#D41159", "Grizzly Bear" = "#994F00")
 
 tidy_df %>%
   inner_join(get_sentiments("bing")) %>%
@@ -139,13 +124,71 @@ tidy_df %>%
   mutate(sentiment = positive - negative) %>% 
   ggplot(aes(id, sentiment, fill = Species)) + 
   geom_col(show.legend = TRUE) + 
-  labs(title = paste("Document Sentiment: Articles About Bears, Boars, and Beavers")) + 
-  ylab("Sentiment") + xlab("Document ID") + 
-  scale_fill_manual(values=species_colors)
+  labs(title = paste("Document Sentiment: Articles About Beavers, Boars, and Grizzly Bears")) + 
+  ylab("Sentiment Score") + xlab("Document ID") + 
+  scale_fill_manual(values=species_colors) + 
+  theme_bw()
 
-#ggsave("sentiment_documents_beavers.png")
+ggsave("sentiment_documents.png", width=7, height=5, dpi=300)
 
 ```
+
+## Sentiment by Species (Common Positive and Negative Words)
+
+```{r sent_com_words}
+sent_test <- tidy_df %>%
+  #filter(Species == "Grizzly Bear") %>%
+  inner_join(get_sentiments("bing")) %>%
+  group_by(Species) %>%
+  count(stem, sentiment, sort = TRUE) %>%
+  ungroup()
+
+# Use the sentiment word counts data frame to make the plot
+# I think we want to use facet wrap here
+sent_test %>%
+  group_by(sentiment, Species) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  mutate(word = reorder(stem, n)) %>%
+  ggplot(aes(n, word, fill = Species)) + 
+  #scale_fill_manual(values=c("tan", "#994F00")) + # change the colors of the bar plot
+  scale_fill_manual(values=species_colors) +
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~sentiment + Species , scales = "free_y", ncol = 2) +
+  #facet_wrap(~factor(sentiment + Species, levels = c("positive", "negative"))) + # didn't work
+  #facet_grid(Species ~ sentiment, scales = "free_y") + # doesn't actually free y axis 
+  labs(x = "Contribution to sentiment", 
+       y = NULL,
+       title = "Most Common Negative and Positive Word Stems by Species") + 
+  theme_bw()
+#ggsave("sentiment_contribution_beavers.png")
+
+sent_for_plot <- sent_test %>%
+  group_by(sentiment, Species) %>%
+  slice_max(n, n = 10) %>%
+  ungroup() %>%
+  mutate(word = reorder(stem, n))
+
+sent_for_plot$Species <- factor(sent_for_plot$Species, levels = c("Beavers","Boars","Grizzly Bear"))
+sent_for_plot$sentiment <- factor(sent_for_plot$sentiment, levels = c("positive", "negative"))
+
+options(repr.plot.width = 5, repr.plot.height = 10)
+sent_for_plot %>%
+  ggplot(aes(n, word, fill = Species)) + 
+  #scale_fill_manual(values=c("tan", "#994F00")) + # change the colors of the bar plot
+  scale_fill_manual(values=species_colors) +
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(.~sentiment + Species , scales = "free_y") +
+  #facet_wrap(~factor(sentiment + Species, levels = c("positive", "negative"))) + # didn't work
+  #facet_grid(Species ~ sentiment, scales = "free_y") + # doesn't actually free y axis 
+  labs(x = "Contribution to sentiment", 
+       y = NULL,
+       title = "Most Common Negative and Positive Word Stems by Species") + 
+  theme_bw()
+
+#ggsave("test_sent_species2.png", width=10, height=6, dpi=300)
+```
+
 
 # Map 
 Need a base map of states
@@ -195,14 +238,24 @@ transformed_data <- usmap_transform(df_states_map, input_names = c("longitude", 
 
 test_with_data <- plot_usmap('states') + 
   geom_point(data = transformed_data, aes(x = x, y = y, color=Species, size=n), 
-  position=position_jitter(h=80000,w=75000)) + 
+  position=position_jitter(h=90000,w=50000)) + 
   scale_size_area(breaks = c(1, 10, 20, 30),
                   limits = c(1, 32)) + 
-  scale_color_manual(values=species_colors)
+  scale_color_manual(values=species_colors) + 
+  labs(title = "Location of Articles Published in the USA", 
+       color = "Species:",
+       size = "Number of Articles:") +
+  theme(plot.title = element_text(size = 12),
+        legend.position = "bottom", 
+        legend.background = element_rect(fill="white",
+                                         size=0.3, linetype="solid", 
+                                         colour ="black"),
+        legend.title = element_text(size = 10), 
+        legend.text = element_text(size = 9))
 
 
 test_with_data
-
+#ggsave("map_article_locations.png")
 ```
 
 
