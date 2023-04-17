@@ -102,11 +102,16 @@ Before making a tidy dataframe and a document term matrix we first need to remov
 
 ```{r remove_no_code1}
 # Make a new dataframe with the rows with no Code1 removed.
-# Here I rename the dataframe so that if anything funny happens we don't have to redownload the articles. 
+# Rename the dataframe so that if anything funny happens one does not have to re-download the articles. 
 df_article_test <- df_article[-which(df_article$Code1 == ""), ]
-# We also need to make the codes "factors". Here we'll create a new column Code1.x which will be factor instead of a character string
-# A character string cannot actually be modeled. When the string is made into a factor, 
-# the string is put into a bin, and the computer can view it as categorical data
+
+# We also need to make the codes "factors". Here we'll create a new column Code1.x which will be factor instead of a character string. A character string cannot actually be modeled. When the string is made into a factor, the string is put into a bin, and the computer can view it as categorical data.
+
+# First, remove any leading or trailing spaces from Code1
+# str_trim() from the stringr package will remove leading and trailing spaced by default
+df_article_test$Code1 <- str_trim(df_article_test$Code1) 
+
+# Then make Code1.x a factor using as.factor()
 df_article_test$Code1.x <- as.factor(df_article_test$Code1)
 
 # Make a tidy data frame by "unnesting" the tokens
@@ -138,34 +143,21 @@ tidy_df <- tidy_df %>%
 
 ```{r common_codes}
 df_article_test %>%
-  count(Code1, sort = TRUE) %>%
+  count(Code1.x, sort = TRUE) %>%
   slice_max(n, n=20) %>%  # set the number of codes to show
-  mutate(Code1 = reorder(Code1, n)) %>%
-  ggplot(aes(n, Code1)) +
+  mutate(Code1.x = reorder(Code1.x, n)) %>%
+  ggplot(aes(n, Code1.x)) +
   geom_col(fill = "blue") +
   labs(title = paste("Top Codes per Article"), 
        y = NULL)
-
-tidy_df %>%
-  count(Code1, sort = TRUE) %>%
-  slice_max(n, n=20) %>%  # set the number of codes to show
-  mutate(Code1 = reorder(Code1, n)) %>%
-  ggplot(aes(n, Code1)) +
-  geom_col(fill = "lightblue") +
-  labs(title = paste("Top Codes per Word"), 
-       y = NULL)
 ```
 
-One thing we could do to help illustrate the supervised learning for education purpose is to make the labels binary. So we could have "Problem is people" and then "Other".
+To help illustrate the supervised learning for educational purpose select only one code ("Problem is wildlife"), and then create an "Other" category for all other codes that are not "Problem is wildlife". 
 
 ```{r recode_tidy_df}
 
-# Replace the values in the df_article. I feel like this should be easy, but I cannot figure it out.
-#df_article_test %>% 
-#    mutate(Code2 = replace(Code1, Code1 != "Problem is people", "Other"))
-
 df_article_test$Code2 <- df_article_test$Code1
-df_article_test$Code2[df_article_test$Code2 != "Problem is people"] <- "Other"
+df_article_test$Code2[df_article_test$Code2 != "Problem is wildlife"] <- "Other"
 
 # Make this a factor as well
 df_article_test$Code2.x <- as.factor(df_article_test$Code2)
@@ -175,26 +167,46 @@ tidy_df$Code2 <- tidy_df$Code1
 tidy_df$Code2[tidy_df$Code2 != "Problem is people"] <- "Other"   
 ```
 
+One thing to consider with supervised learning is if the labels are "balanced". In this case, do we have many more documents labeled as "Problem is people" or labeled as "Other"?
 
-Now that we have a tidy dataframe with the uncoded rows removed we can make, or *cast*, the tidy frame into a document term matrix. In this case we will include the term frequency - inverse document frequency (tf-idf) because this we tell us the most relevant, important, or unique words for each document. We could also use the word counts, but for supervised machine learning the tf-idf will tell us a little more information. "To put it another way: we can actually compare words based on how unique they are to a document using tf_idf" (https://bookdown.org/josephine_lukito/j381m_tutorials/data-wrangling.html#tf-idf)
+```{r code_balance}
+# Count the number of occurrences for each of the binary codes
+df_article_test %>%
+  count(Code2, sort = TRUE) 
+
+# prop.table() is a quick way to show the proportion instead of the number of occurrences
+table(df_article_test$Code2) %>% prop.table()
+
+df_article_test %>%
+  count(Code1, sort = TRUE)
+
+table(df_article_test$Code1) %>% prop.table()
+
+```
+
+Our binary Code2 codes are very unbalanced. We will not address this issue here, but it is something to consider in the future. 
+
+Now that we have a tidy dataframe with the uncoded rows removed we can make, or *cast*, the tidy frame into a document term matrix. In this case we will include the term frequency - inverse document frequency (tf-idf) because this will tell us the most relevant, important, or unique words for each document. We could also use the word counts, but for supervised machine learning the tf-idf will tell us a little more information. "To put it another way: we can actually compare words based on how unique they are to a document using tf_idf" (https://bookdown.org/josephine_lukito/j381m_tutorials/data-wrangling.html#tf-idf)
+
+In machine learning "features" refers to the predictor variables or independent variables. In text analysis and classification there are often thousands of features because each term frequency or tf-idf is a feature. In the future, we will address this by using a dimensionality reduction method. 
 
 ```{r create_dtm}
 
 # To create the dtm we use the tidy dataframe
-# We calculate the term frequency using the count() function
-# We then use bind_tf_idf() function to calculate the tf-idf
-# Finally we "cast" the tidy dataframe into the document term matrix (dtm) making sure that we use tf-idf as the variable of interest
+# Calculate the term frequency using the count() function
+# Use bind_tf_idf() function to calculate the tf-idf
+# Finally, "cast" the tidy dataframe into the document term matrix (dtm) 
 
 dtm <- tidy_df %>%
-  count(id, word, sort = TRUE) %>%
-  bind_tf_idf(word, id, n) %>% 
-  cast_dtm(id, word, tf_idf) 
+  count(id, stem, sort = TRUE) %>%
+  bind_tf_idf(stem, id, n) %>% 
+  cast_dtm(id, stem, tf_idf) 
 
 ```
 
 ## Splitting the data into a "training" set and a "test" set
 
-With most (supervised) machine learning algorithms, the machine "learns" by training a model on a subset of the data which is labeled. Then, we use the resulting "trained" model to make predictions on the subset of that data for testing. In general, the split for training and testing is 70/30.
+With most (supervised) machine learning algorithms, the machine "learns" by training a model on a subset of the data which is labeled. Then, the resulting "trained" model is used to make predictions on the subset of that data for testing. In general, the split for training and testing is 70/30.
 
 ```{r split_train_test}
 # First set a seed. Since this is a random process, setting the seed allows others to get the same output.
@@ -204,10 +216,12 @@ set.seed(455)
 #trainIndex <- createDataPartition(y = df_article_test$Code1.x, p = 0.7,list = FALSE)
 trainIndex <- createDataPartition(y = df_article_test$Code2.x, p = 0.7,list = FALSE)
 
-# In the next lines
+# Split the data into the training data with the trainIndex
 data_to_train <- dtm[trainIndex, ] %>% as.matrix() %>% as.data.frame()
-data_to_test <- dtm[-trainIndex, ] %>% as.matrix() %>% as.data.frame()
+# Split the data into the testing data using indexes that are not in the trainIndex
+data_to_test <- dtm[-trainIndex, ] %>% as.matrix() %>% as.data.frame() # putting the "-" in front of trainIndex tells R to pick all the values not in the trainIndex
 
+# Need the labeled data split as well
 label_train <- df_article_test$Code2.x[trainIndex]
 
 ```
@@ -217,20 +231,24 @@ Now that we have our training set, testing set, and the labels we can start work
 2. Use the trained model to make classification predictions on the testing dataset
 3. Check the model performance. In this case we will look at a "Confusion Matrix" as well as the accuracy and F1 score.
 
-
-
 ## KNN: K-Nearest Neighbors
 
 ```{r knn}
 # Set the resampling method to bootstrap, useful if applying different machine learning strategies but using the same arguments
 trctrl <- trainControl(method = "boot")
 
+# Set the parameter "k". K tells the model how many neighbors (documents) to look for. 
+# In this case, the training data has 119 documents. A
+# A very large k will underfit the data, while a very small k will over fit the data
+
+k = 2 # Change the value of k to see how the performance metrics change (and the computation speed)
+
 # 1. Train the model
 knn_model_con <- train(x = data_to_train, #training data
                               y = as.factor(label_train), #labeled data
                               method = "knn", #the algorithm
                               trControl = trctrl, #the resampling strategy we will use
-                              tuneGrid = data.frame(k = 2) #the hyperparameter, how many neighbors to look for
+                              tuneGrid = data.frame(k = k) #the hyperparameter, how many neighbors to look for
 )
 
 # 2. Test the trained model on the test data
@@ -264,13 +282,23 @@ And the F1 score is 0.88
 # SVM: Support Vector Machines
 
 ```{r svm}
+
+# Set the C parameter
+# Within a SVM the C parameter controls the size of the margin around the decision boundary
+# That means that C will allow a certain amount of misclassification within the model
+# Higher values of C means that it is less likely the SVM will misclassify a document
+cost = 0.75 
+
+# Loss is the loss function and...
+loss = 2
+
 # 1. Train the model on the training data
 svm_model <- train(x = data_to_train,
                           y = as.factor(label_train),
                           method = "svmLinear3",
                           trControl = trctrl, 
-                          tuneGrid = data.frame(cost = 1, #accounts for over-fitting
-                                                Loss = 2)) #accounts for misclassifications
+                          tuneGrid = data.frame(cost = cost,
+                                                Loss = loss))
 
 # 2. Test the trained model on the test data
 svm_predict <- predict(svm_model, newdata = data_to_test)
