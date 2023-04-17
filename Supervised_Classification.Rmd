@@ -283,7 +283,7 @@ And the F1 score is 0.88
 
 ```{r svm}
 
-# Set the C parameter
+# Set the cost and Loss parameters
 # Within a SVM the C parameter controls the size of the margin around the decision boundary
 # That means that C will allow a certain amount of misclassification within the model
 # Higher values of C means that it is less likely the SVM will misclassify a document
