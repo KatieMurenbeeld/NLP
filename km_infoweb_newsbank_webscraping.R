@@ -41,7 +41,7 @@ links <- html_document %>%
   html_nodes(xpath = "//div[contains(@class, 'search-hits')]/a") %>%
   html_attr(name = "href")
 
-# The above is almost correct, but we need to add the "https://infoweb.newsbank.com" to the front 
+# Need to add the "https://infoweb.newsbank.com" to the front 
 links <- paste0("https://infoweb.newsbank.com", links)
 
 links
@@ -78,7 +78,7 @@ article <- data.frame(
   source = source,
   body = text[[9]])
 
-# Now we want to get the title, date, and text from the links
+# A function to get the title, date, and text from the links
 # Function updated from https://ladal.edu.au/webcrawling.html 
 scrape_article <- function(url) {
   # start PhantomJS
@@ -88,8 +88,8 @@ scrape_article <- function(url) {
   html_document <- read_html(rendered_source)
   # extract title
   title <- html_document %>%
-    #rvest::html_node("h1") %>%
-    rvest::html_nodes("h1 [class='document-view__title read clipcopy']") %>%
+    rvest::html_node("h1") %>%
+    #rvest::html_nodes("h1 [class='document-view__title read clipcopy']") %>%
     rvest::html_text(trim = T)
   # extract text
   text <- html_document %>%
@@ -116,7 +116,7 @@ scrape_article <- function(url) {
   
 }
 
-test_article <- scrape_article(links[[11]])
+test_article <- scrape_article(links[[4]])
 
 # create container for loop output
 all_articles <- data.frame()
