@@ -115,7 +115,7 @@ sent <- tidy_df %>%
   count(stem, sentiment, sort = TRUE) %>%
   ungroup()
 
-species_colors <- c("Beavers" = "#005AB5", "Boars" = "red", "Grizzly Bear" = "purple")
+species_colors <- c("Beavers" = "#C83438", "Boars" = "#8FD7E0", "Grizzly Bear" = "#09929F")
 
 tidy_df %>%
   inner_join(get_sentiments("bing")) %>%
@@ -129,7 +129,7 @@ tidy_df %>%
   scale_y_continuous(name="Sentiment Score", limits=c(-300, 100)) +
   labs(title = paste("Document Sentiment: Articles About Beavers, Boars, \n and Grizzly Bears")) + 
   ylab("Sentiment Score") + xlab("Document ID") + 
-  #scale_fill_manual(values=species_colors) + 
+  scale_fill_manual(values=species_colors) + 
   theme_bw() + 
   theme(plot.title = element_text(size=16), axis.text.x = element_text(size=14), 
         axis.text.y = element_text(size=14), axis.title.x = element_text(size=14),
@@ -137,12 +137,13 @@ tidy_df %>%
         legend.text = element_text(size=14))
 
 
-ggsave("sentiment_documents.png", width=7, height=5, dpi=300)
+ggsave("sentiment_documents_03.png", width=7, height=5, dpi=300)
 
 ```
 ## Word cloud
 
 ```{r word_clouds}
+png("beavers_wordcloud_03.png", width = 400, height = 400)
 tidy_df %>%
   filter(id == 78) %>%
   inner_join(get_sentiments("bing")) %>%
@@ -151,8 +152,10 @@ tidy_df %>%
   column_to_rownames(var="stem") %>% 
   as.matrix() %>% 
   comparison.cloud(colors = c("blue", "green"),
-                   max.words = 100, match.colors = TRUE)
+                   max.words = 50, match.colors = TRUE)
+dev.off()
 
+png("boars_wordcloud_03.png", width = 200, height = 200)
 tidy_df %>%
   filter(id == 162) %>%
   inner_join(get_sentiments("bing")) %>%
@@ -161,7 +164,8 @@ tidy_df %>%
   column_to_rownames(var="stem") %>% 
   as.matrix() %>% 
   comparison.cloud(colors = c("blue", "green"),
-                   max.words = 100, match.colors = TRUE)
+                   max.words = 30, match.colors = TRUE)
+dev.off()
 ```
 
 
@@ -184,7 +188,7 @@ sent_test %>%
   ungroup() %>%
   mutate(word = reorder(stem, n)) %>%
   ggplot(aes(n, word, fill = Species)) + 
-  #scale_fill_manual(values=species_colors) +
+  scale_fill_manual(values=species_colors) +
   geom_col(show.legend = FALSE) + 
   facet_wrap(~Species + sentiment , scales = "free_y", ncol = 2) +
   #facet_wrap(~factor(sentiment + Species, levels = c("positive", "negative"))) + # didn't work
@@ -196,7 +200,7 @@ sent_test %>%
   theme(plot.title = element_text(size=16), axis.text.x = element_text(size=14), 
         axis.text.y = element_text(size=14), axis.title.x = element_text(size=14), 
         strip.text.x = element_text(size=14))
-ggsave("sentiment_contribution_vert.png", width=6, height=10, dpi=300)
+ggsave("sentiment_contribution_vert_03.png", width=6, height=10, dpi=300)
 
 sent_for_plot <- sent_test %>%
   group_by(sentiment, Species) %>%
@@ -210,7 +214,7 @@ sent_for_plot$sentiment <- factor(sent_for_plot$sentiment, levels = c("positive"
 options(repr.plot.width = 5, repr.plot.height = 10)
 sent_for_plot %>%
   ggplot(aes(n, word, fill = Species)) + 
-  #scale_fill_manual(values=species_colors) +
+  scale_fill_manual(values=species_colors) +
   geom_col(show.legend = FALSE) + 
   facet_wrap(.~sentiment + Species , scales = "free_y") +
   #facet_wrap(~factor(sentiment + Species, levels = c("positive", "negative"))) + # didn't work
@@ -221,7 +225,7 @@ sent_for_plot %>%
   theme_bw() + 
   theme(plot.title = element_text(size=16), axis.text.x = element_text(size=14), axis.text.y = element_text(size=14), axis.title.x = element_text(size=14), strip.text.x = element_text(size=14)) 
 
-ggsave("sentiment_contribution_horiz.png", width=10, height=6, dpi=300)
+ggsave("sentiment_contribution_horiz_03.png", width=10, height=6, dpi=300)
 ```
 
 
@@ -276,7 +280,7 @@ test_with_data <- plot_usmap('states') +
   scale_size_area(breaks = c(1, 10, 20, 30),
                   limits = c(1, 32)) + 
  # scale_shape_manual(values=c(20, 16, 17)) +
- # scale_color_manual(values=species_colors) + 
+  scale_color_manual(values=species_colors) + 
   labs(title = "Location of Articles Published in the USA", 
        #color = "Species:",
        size = "Number of Articles:") +
@@ -290,7 +294,7 @@ test_with_data <- plot_usmap('states') +
 
 
 test_with_data
-ggsave("map_article_locations_02.png", width=10, height=5, dpi=300)
+ggsave("map_article_locations_03.png", width=10, height=5, dpi=300)
 ```
 
 
