@@ -40,6 +40,7 @@ article_codes <- article_codes %>%
   filter(!Link=='') %>% 
   filter(!Species == "Wolves") %>%
   filter(!Article.Type == "NA") %>%
+  #filter(!Article.Title == "Designers say hello to comfort and individuality - into the 90s") %>%
   mutate(id = row_number())
 
 # create a vector or list of the urls from the csv
@@ -114,7 +115,7 @@ sent <- tidy_df %>%
   count(stem, sentiment, sort = TRUE) %>%
   ungroup()
 
-species_colors <- c("Beavers" = "#005AB5", "Boars" = "#D41159", "Grizzly Bear" = "#994F00")
+species_colors <- c("Beavers" = "#005AB5", "Boars" = "red", "Grizzly Bear" = "purple")
 
 tidy_df %>%
   inner_join(get_sentiments("bing")) %>%
@@ -124,14 +125,46 @@ tidy_df %>%
   mutate(sentiment = positive - negative) %>% 
   ggplot(aes(id, sentiment, fill = Species)) + 
   geom_col(show.legend = TRUE) + 
-  labs(title = paste("Document Sentiment: Articles About Beavers, Boars, and Grizzly Bears")) + 
+  scale_x_continuous(name="Document ID", limits=c(1, 171)) +
+  scale_y_continuous(name="Sentiment Score", limits=c(-300, 100)) +
+  labs(title = paste("Document Sentiment: Articles About Beavers, Boars, \n and Grizzly Bears")) + 
   ylab("Sentiment Score") + xlab("Document ID") + 
-  scale_fill_manual(values=species_colors) + 
-  theme_bw()
+  #scale_fill_manual(values=species_colors) + 
+  theme_bw() + 
+  theme(plot.title = element_text(size=16), axis.text.x = element_text(size=14), 
+        axis.text.y = element_text(size=14), axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size=14), legend.title = element_text(size=14),
+        legend.text = element_text(size=14))
+
 
 ggsave("sentiment_documents.png", width=7, height=5, dpi=300)
 
 ```
+## Word cloud
+
+```{r word_clouds}
+tidy_df %>%
+  filter(id == 78) %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(stem, sentiment, sort = TRUE) %>%
+  pivot_wider(id_cols = stem, names_from = sentiment, values_from = n, values_fill = 0) %>%
+  column_to_rownames(var="stem") %>% 
+  as.matrix() %>% 
+  comparison.cloud(colors = c("blue", "green"),
+                   max.words = 100, match.colors = TRUE)
+
+tidy_df %>%
+  filter(id == 162) %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(stem, sentiment, sort = TRUE) %>%
+  pivot_wider(id_cols = stem, names_from = sentiment, values_from = n, values_fill = 0) %>%
+  column_to_rownames(var="stem") %>% 
+  as.matrix() %>% 
+  comparison.cloud(colors = c("blue", "green"),
+                   max.words = 100, match.colors = TRUE)
+```
+
+
 
 ## Sentiment by Species (Common Positive and Negative Words)
 
@@ -147,25 +180,27 @@ sent_test <- tidy_df %>%
 # I think we want to use facet wrap here
 sent_test %>%
   group_by(sentiment, Species) %>%
-  slice_max(n, n = 10) %>%
+  slice_max(n, n = 5) %>%
   ungroup() %>%
   mutate(word = reorder(stem, n)) %>%
   ggplot(aes(n, word, fill = Species)) + 
-  #scale_fill_manual(values=c("tan", "#994F00")) + # change the colors of the bar plot
-  scale_fill_manual(values=species_colors) +
+  #scale_fill_manual(values=species_colors) +
   geom_col(show.legend = FALSE) + 
-  facet_wrap(~sentiment + Species , scales = "free_y", ncol = 2) +
+  facet_wrap(~Species + sentiment , scales = "free_y", ncol = 2) +
   #facet_wrap(~factor(sentiment + Species, levels = c("positive", "negative"))) + # didn't work
   #facet_grid(Species ~ sentiment, scales = "free_y") + # doesn't actually free y axis 
   labs(x = "Contribution to sentiment", 
        y = NULL,
        title = "Most Common Negative and Positive Word Stems by Species") + 
-  theme_bw()
-#ggsave("sentiment_contribution_beavers.png")
+  theme_bw() +
+  theme(plot.title = element_text(size=16), axis.text.x = element_text(size=14), 
+        axis.text.y = element_text(size=14), axis.title.x = element_text(size=14), 
+        strip.text.x = element_text(size=14))
+ggsave("sentiment_contribution_vert.png", width=6, height=10, dpi=300)
 
 sent_for_plot <- sent_test %>%
   group_by(sentiment, Species) %>%
-  slice_max(n, n = 10) %>%
+  slice_max(n, n = 5) %>%
   ungroup() %>%
   mutate(word = reorder(stem, n))
 
@@ -175,8 +210,7 @@ sent_for_plot$sentiment <- factor(sent_for_plot$sentiment, levels = c("positive"
 options(repr.plot.width = 5, repr.plot.height = 10)
 sent_for_plot %>%
   ggplot(aes(n, word, fill = Species)) + 
-  #scale_fill_manual(values=c("tan", "#994F00")) + # change the colors of the bar plot
-  scale_fill_manual(values=species_colors) +
+  #scale_fill_manual(values=species_colors) +
   geom_col(show.legend = FALSE) + 
   facet_wrap(.~sentiment + Species , scales = "free_y") +
   #facet_wrap(~factor(sentiment + Species, levels = c("positive", "negative"))) + # didn't work
@@ -184,9 +218,10 @@ sent_for_plot %>%
   labs(x = "Contribution to sentiment", 
        y = NULL,
        title = "Most Common Negative and Positive Word Stems by Species") + 
-  theme_bw()
+  theme_bw() + 
+  theme(plot.title = element_text(size=16), axis.text.x = element_text(size=14), axis.text.y = element_text(size=14), axis.title.x = element_text(size=14), strip.text.x = element_text(size=14)) 
 
-#ggsave("test_sent_species2.png", width=10, height=6, dpi=300)
+ggsave("sentiment_contribution_horiz.png", width=10, height=6, dpi=300)
 ```
 
 
@@ -237,25 +272,25 @@ transformed_data <- usmap_transform(df_states_map, input_names = c("longitude", 
 #test_base <- plot_usmap()
 
 test_with_data <- plot_usmap('states') + 
-  geom_point(data = transformed_data, aes(x = x, y = y, color=Species, size=n), 
-  position=position_jitter(h=90000,w=50000)) + 
+  geom_point(data = transformed_data, aes(x = x, y = y, group = Species, color=Species, size=n, shape=Species), position=position_dodge(width = 300000)) + 
   scale_size_area(breaks = c(1, 10, 20, 30),
                   limits = c(1, 32)) + 
-  scale_color_manual(values=species_colors) + 
+ # scale_shape_manual(values=c(20, 16, 17)) +
+ # scale_color_manual(values=species_colors) + 
   labs(title = "Location of Articles Published in the USA", 
-       color = "Species:",
+       #color = "Species:",
        size = "Number of Articles:") +
-  theme(plot.title = element_text(size = 12),
+  theme(plot.title = element_text(size = 16),
         legend.position = "bottom", 
         legend.background = element_rect(fill="white",
                                          size=0.3, linetype="solid", 
                                          colour ="black"),
-        legend.title = element_text(size = 10), 
-        legend.text = element_text(size = 9))
+        legend.title = element_text(size = 14), 
+        legend.text = element_text(size = 14))
 
 
 test_with_data
-#ggsave("map_article_locations.png")
+ggsave("map_article_locations_02.png", width=10, height=5, dpi=300)
 ```
 
 
